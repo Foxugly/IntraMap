@@ -191,3 +191,136 @@ def test_plantuml_uplink_to_unknown_mac_is_silently_skipped():
     # No edge drawn since the target MAC isn't in the inventory
     assert " -- " not in out
     assert "sw:4" not in out
+
+
+# ---------------------------------------------------------------------------
+# Graphviz (DOT) renderer tests
+# ---------------------------------------------------------------------------
+
+from intramap.renderers.graphviz import render as render_graphviz
+
+
+def test_graphviz_outputs_a_graph():
+    inv = Inventory(hosts={}, last_scan=datetime(2026, 5, 24))
+    out = render_graphviz(inv)
+    assert out.lstrip().startswith("graph ")
+    assert out.rstrip().endswith("}")
+
+
+def test_graphviz_groups_with_clusters():
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host(
+            "aa:bb:cc:dd:ee:01", "192.168.1.1",
+            custom_name="Box", location=Location(floor="RDC", room="salon"),
+        ),
+        "aa:bb:cc:dd:ee:02": make_host(
+            "aa:bb:cc:dd:ee:02", "192.168.1.10",
+            custom_name="Switch",
+            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
+        ),
+    }, last_scan=datetime(2026, 5, 24))
+
+    out = render_graphviz(inv)
+    assert "subgraph cluster_" in out
+    assert 'label="RDC"' in out
+    assert 'label="salon"' in out
+    assert 'label="sous-sol"' in out
+    assert 'label="local-tech"' in out
+    assert 'label="baie-A"' in out
+    assert "Box" in out
+    assert "Switch" in out
+
+
+def test_graphviz_non_localised_group():
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:99": make_host("aa:bb:cc:dd:ee:99", "192.168.1.99"),
+    }, last_scan=datetime(2026, 5, 24))
+    out = render_graphviz(inv)
+    assert 'label="Non localisé"' in out
+
+
+def test_graphviz_offline_host_dashed():
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host(
+            "aa:bb:cc:dd:ee:01", "192.168.1.1",
+            location=Location(floor="RDC", room="salon"),
+            online=False,
+        ),
+    }, last_scan=datetime(2026, 5, 24))
+    out = render_graphviz(inv)
+    assert "style=dashed" in out
+
+
+def test_graphviz_escapes_double_quotes():
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host(
+            "aa:bb:cc:dd:ee:01", "192.168.1.1",
+            custom_name='PC "test"',
+            location=Location(floor="RDC", room="salon"),
+        ),
+    }, last_scan=datetime(2026, 5, 24))
+    out = render_graphviz(inv)
+    assert 'PC \\"test\\"' in out
+
+
+def test_graphviz_draws_edge_for_valid_uplink():
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host(
+            "aa:bb:cc:dd:ee:01", "192.168.1.10",
+            custom_name="Switch",
+            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
+        ),
+        "aa:bb:cc:dd:ee:02": make_host(
+            "aa:bb:cc:dd:ee:02", "192.168.1.50",
+            custom_name="Cam",
+            location=Location(floor="RDC", room="hall"),
+            uplink=Uplink(
+                switch_mac="aa:bb:cc:dd:ee:01",
+                switch_port=4,
+                patch_port=7,
+                poe=False,
+            ),
+        ),
+    }, last_scan=datetime(2026, 5, 24))
+
+    out = render_graphviz(inv)
+    assert " -- " in out
+    assert "sw:4" in out
+    assert "pp:7" in out
+
+
+def test_graphviz_poe_uplink_styled_orange():
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host(
+            "aa:bb:cc:dd:ee:01", "192.168.1.10",
+            custom_name="Switch",
+            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
+        ),
+        "aa:bb:cc:dd:ee:02": make_host(
+            "aa:bb:cc:dd:ee:02", "192.168.1.50",
+            custom_name="Cam",
+            location=Location(floor="RDC", room="hall"),
+            uplink=Uplink(switch_mac="aa:bb:cc:dd:ee:01",
+                          switch_port=4, poe=True),
+        ),
+    }, last_scan=datetime(2026, 5, 24))
+
+    out = render_graphviz(inv)
+    assert "PoE" in out
+    assert 'color="orange"' in out
+    assert "penwidth=2" in out
+
+
+def test_graphviz_uplink_to_unknown_mac_is_silently_skipped():
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:02": make_host(
+            "aa:bb:cc:dd:ee:02", "192.168.1.50",
+            custom_name="Cam",
+            location=Location(floor="RDC", room="hall"),
+            uplink=Uplink(switch_mac="ff:ff:ff:ff:ff:ff", switch_port=4),
+        ),
+    }, last_scan=datetime(2026, 5, 24))
+
+    out = render_graphviz(inv)
+    assert " -- " not in out
+    assert "sw:4" not in out
