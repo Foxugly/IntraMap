@@ -1,10 +1,12 @@
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
+from typing import Iterable
 
 import yaml
 
-from intramap.models import Inventory
+from intramap.models import DiscoveredHost, Host, Inventory, Location
 
 
 def load(path: str | Path) -> Inventory:
@@ -43,3 +45,44 @@ def save(inv: Inventory, path: str | Path) -> None:
             except OSError:
                 pass
         raise
+
+
+def merge(inv: Inventory, discovered: Iterable[DiscoveredHost],
+          now: datetime) -> None:
+    """Merge a list of newly discovered hosts into the inventory in place.
+
+    - New MAC: added with empty custom_name/location/uplink,
+      first_seen=last_seen=now
+    - Existing MAC: ip/hostname/vendor/last_seen updated, online=True;
+      custom_name/location/uplink/first_seen preserved
+    - Existing MAC absent from discovered: online=False, all other fields preserved
+    """
+    discovered_by_mac = {d.mac: d for d in discovered}
+
+    for mac, d in discovered_by_mac.items():
+        if mac in inv.hosts:
+            h = inv.hosts[mac]
+            h.ip = d.ip
+            h.hostname = d.hostname
+            h.vendor = d.vendor
+            h.last_seen = now
+            h.online = True
+        else:
+            inv.hosts[mac] = Host(
+                mac=mac,
+                ip=d.ip,
+                hostname=d.hostname,
+                vendor=d.vendor,
+                first_seen=now,
+                last_seen=now,
+                custom_name=None,
+                location=Location(),
+                uplink=None,
+                online=True,
+            )
+
+    for mac, h in inv.hosts.items():
+        if mac not in discovered_by_mac:
+            h.online = False
+
+    inv.last_scan = now

@@ -141,3 +141,102 @@ def test_load_accepts_bare_date_in_yaml(tmp_path: Path):
     assert inv.last_scan == datetime(2026, 5, 24)
     assert inv.hosts["aa:bb:cc:dd:ee:01"].first_seen == datetime(2026, 5, 1)
     assert inv.hosts["aa:bb:cc:dd:ee:01"].last_seen == datetime(2026, 5, 24)
+
+
+from intramap.inventory import merge
+from intramap.models import DiscoveredHost, Uplink
+
+
+def test_merge_adds_new_host_with_empty_annotations():
+    inv = Inventory()
+    now = datetime(2026, 5, 24, 14, 0, 0)
+    discovered = [DiscoveredHost(mac="aa:bb:cc:dd:ee:01",
+                                 ip="192.168.1.1",
+                                 hostname="box",
+                                 vendor="Sagemcom")]
+    merge(inv, discovered, now=now)
+
+    h = inv.hosts["aa:bb:cc:dd:ee:01"]
+    assert h.ip == "192.168.1.1"
+    assert h.hostname == "box"
+    assert h.vendor == "Sagemcom"
+    assert h.custom_name is None
+    assert h.location == Location()
+    assert h.uplink is None
+    assert h.first_seen == now
+    assert h.last_seen == now
+    assert h.online is True
+    assert inv.last_scan == now
+
+
+def test_merge_existing_host_preserves_annotations():
+    earlier = datetime(2026, 5, 1, 10, 0, 0)
+    now = datetime(2026, 5, 24, 14, 0, 0)
+    uplink_value = Uplink(
+        switch_mac="aa:bb:cc:dd:ee:02",
+        switch_port=4,
+        patch_port=7,
+        poe=True,
+    )
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01",
+            ip="192.168.1.5",         # old IP
+            hostname="old-name",
+            vendor="OldVendor",
+            custom_name="Box internet",
+            location=Location(floor="RDC", room="salon"),
+            uplink=uplink_value,
+            first_seen=earlier,
+            last_seen=earlier,
+            online=False,
+        ),
+    }, last_scan=earlier)
+
+    discovered = [DiscoveredHost(mac="aa:bb:cc:dd:ee:01",
+                                 ip="192.168.1.1",
+                                 hostname="livebox",
+                                 vendor="Sagemcom")]
+    merge(inv, discovered, now=now)
+
+    h = inv.hosts["aa:bb:cc:dd:ee:01"]
+    # updated
+    assert h.ip == "192.168.1.1"
+    assert h.hostname == "livebox"
+    assert h.vendor == "Sagemcom"
+    assert h.last_seen == now
+    assert h.online is True
+    # preserved
+    assert h.custom_name == "Box internet"
+    assert h.location == Location(floor="RDC", room="salon")
+    assert h.uplink == uplink_value
+    assert h.first_seen == earlier
+
+
+def test_merge_absent_host_marked_offline():
+    earlier = datetime(2026, 5, 1, 10, 0, 0)
+    now = datetime(2026, 5, 24, 14, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01",
+            ip="192.168.1.1",
+            hostname="box",
+            vendor="Sagemcom",
+            custom_name="Box",
+            location=Location(floor="RDC"),
+            first_seen=earlier,
+            last_seen=earlier,
+            online=True,
+        ),
+    }, last_scan=earlier)
+
+    merge(inv, [], now=now)  # nothing discovered
+
+    h = inv.hosts["aa:bb:cc:dd:ee:01"]
+    assert h.online is False
+    # everything else unchanged
+    assert h.ip == "192.168.1.1"
+    assert h.hostname == "box"
+    assert h.custom_name == "Box"
+    assert h.last_seen == earlier
+    assert h.first_seen == earlier
