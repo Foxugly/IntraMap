@@ -569,3 +569,87 @@ def test_plantuml_invalid_device_type_falls_back_to_question(make_host_factory):
 
     assert "<$question>" in out
     assert "<$hard_drive>" not in out
+
+
+def test_graphviz_emits_image_attribute(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+            custom_name="NAS",
+        ),
+    })
+    out = render(inv)
+
+    assert 'image="icons/nas.svg"' in out
+    assert 'labelloc="b"' in out
+    assert "imagescale=true" in out
+
+
+def test_graphviz_explicit_device_type_overrides_inference(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01",
+            vendor="TP-Link Systems",  # would infer 'ap'
+            device_type="controller",
+        ),
+    })
+    out = render(inv)
+
+    assert 'image="icons/controller.svg"' in out
+    assert 'image="icons/ap.svg"' not in out
+
+
+def test_graphviz_unknown_vendor_uses_other_icon(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor=None,
+        ),
+    })
+    out = render(inv)
+
+    assert 'image="icons/other.svg"' in out
+
+
+def test_graphviz_offline_host_keeps_image_and_uses_dashed_style(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+            online=False,
+        ),
+    })
+    out = render(inv)
+
+    assert 'image="icons/nas.svg"' in out
+    assert "style=dashed" in out
+
+
+def test_graphviz_copy_assets_to_writes_icons(tmp_path, make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom",
+        ),
+    })
+    out = render(inv, copy_assets_to=tmp_path)
+
+    assert (tmp_path / "icons" / "nas.svg").is_file()
+    assert (tmp_path / "icons" / "router.svg").is_file()
+    # No copy when copy_assets_to is None: covered by other tests that
+    # didn't pass the arg.

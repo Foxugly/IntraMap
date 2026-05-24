@@ -1,6 +1,8 @@
 from collections import defaultdict
+from pathlib import Path
 
-from intramap.models import Host, Inventory, Uplink
+from intramap.models import Host, Inventory, Uplink, _resolve_device_type
+from intramap.renderers.icons import copy_icons_to
 
 
 _UNLOCALISED = "Non localisé"
@@ -36,8 +38,12 @@ def _edge_label(uplink: Uplink) -> str:
     return " ".join(parts)
 
 
-def render(inv: Inventory) -> str:
-    """Render an Inventory as Graphviz DOT text."""
+def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
+    """Render `inv` as Graphviz DOT text.
+
+    If `copy_assets_to` is given, also copy the SVG icons of all used
+    device_types into `<copy_assets_to>/icons/`.
+    """
     # Stable node IDs per MAC so edges reference consistent identifiers
     node_ids: dict[str, str] = {
         mac: f"h{i + 1}" for i, mac in enumerate(sorted(inv.hosts.keys()))
@@ -54,7 +60,13 @@ def render(inv: Inventory) -> str:
     cluster_id = 0
 
     def render_host(host: Host, indent: str) -> None:
-        attrs = [f'label="{_label(host)}"']
+        device_type = _resolve_device_type(host)
+        attrs = [
+            f'label="{_label(host)}"',
+            f'image="icons/{device_type}.svg"',
+            'labelloc="b"',
+            'imagescale=true',
+        ]
         if not host.online:
             attrs.append("style=dashed")
             attrs.append('color="#888888"')
@@ -113,4 +125,9 @@ def render(inv: Inventory) -> str:
         lines.append(f"  {node_ids[host.mac]} -- {node_ids[u.switch_mac]}{attrs_str};")
 
     lines.append("}")
+
+    if copy_assets_to is not None:
+        used_types = {_resolve_device_type(h) for h in inv.hosts.values()}
+        copy_icons_to(copy_assets_to, used_types)
+
     return "\n".join(lines) + "\n"
