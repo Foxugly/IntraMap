@@ -14,15 +14,18 @@ IntraMap scanne un réseau IPv4 local, en extrait les appareils (IP, MAC, hostna
 - Scan d'un subnet IPv4 (auto-détecté ou passé en argument)
 - Identification des appareils par adresse MAC (clé stable même si l'IP change)
 - Récupération IP, MAC, hostname (DNS/NetBIOS), vendor (OUI MAC)
+- Localisation physique saisie à la main : étage > pièce > baie > U dans la baie
+- Câblage déclaré à la main (optionnel) sur chaque host : uplink vers un switch (port switch, port patch panel), indicateur PoE
 - Fichier YAML d'inventaire éditable à la main, versionnable git
 - Merge intelligent entre scans : annotations préservées, nouveaux appareils signalés, appareils absents marqués `offline`
 - Génération de schémas PlantUML et Graphviz (DOT) en parallèle
 - Regroupement visuel par étage > pièce > baie ; appareils sans localisation dans un groupe « non localisé »
+- Arêtes dans le schéma pour les uplinks déclarés, style distinct pour les liens PoE
 - CLI avec sous-commandes `scan`, `render`, `list`
 
 **Exclus :**
 - IPv6
-- Topologie L2 (qui-est-branché-où via SNMP)
+- Découverte automatique de topologie L2 via SNMP (les liens sont uniquement déclarés à la main)
 - Scan inter-subnet, VLAN
 - Interface web / GUI
 - Rendu image (PNG/SVG) intégré : on génère seulement les fichiers texte `.puml` et `.dot` ; l'utilisateur les rend avec ses propres outils
@@ -79,6 +82,19 @@ class Location:
     rack_unit: int | None = None  # position U dans la baie, optionnel
 
 @dataclass
+class Uplink:
+    """Câblage déclaré à la main de l'host vers son switch.
+
+    Chemin du câble : host -> (patch panel de la baie de l'host, port
+    `patch_port`) -> switch (identifié par sa MAC `switch_mac`),
+    port `switch_port`. Tous les champs sont optionnels.
+    """
+    switch_mac: str | None = None   # MAC du switch (host de l'inventaire)
+    switch_port: int | None = None  # port physique sur le switch
+    patch_port: int | None = None   # port sur le patch panel de la baie de l'host
+    poe: bool = False               # True si l'host est alimenté en PoE
+
+@dataclass
 class DiscoveredHost:
     """Résultat brut d'un scan, avant intégration à l'inventaire."""
     mac: str            # toujours normalisée : lowercase, ':' comme séparateur
@@ -94,14 +110,15 @@ class Host:
     vendor: str | None              # depuis OUI de la MAC
     custom_name: str | None = None  # nom donné par l'utilisateur
     location: Location = field(default_factory=Location)
+    uplink: Uplink | None = None    # câblage déclaré, None si non saisi (ex: Wi-Fi)
     first_seen: datetime            # auto à la première détection
     last_seen: datetime             # mis à jour à chaque scan où on le revoit
     online: bool = True             # False si absent du dernier scan
 
 @dataclass
 class Inventory:
-    hosts: dict[str, Host]          # clé = MAC normalisée
-    last_scan: datetime
+    hosts: dict[str, Host] = field(default_factory=dict)  # clé = MAC normalisée
+    last_scan: datetime | None = None
 ```
 
 ### 5.2 Identité
@@ -136,6 +153,7 @@ hosts:
     vendor: Sagemcom
     custom_name: Box internet
     location: {floor: RDC, room: salon, rack: null, rack_unit: null}
+    uplink: null
     first_seen: 2026-05-01T10:00:00
     last_seen: 2026-05-24T14:30:00
     online: true
@@ -145,6 +163,21 @@ hosts:
     vendor: Cisco
     custom_name: Switch principal
     location: {floor: sous-sol, room: local-tech, rack: baie-A, rack_unit: 12}
+    uplink: null
+    first_seen: 2026-05-01T10:00:00
+    last_seen: 2026-05-24T14:30:00
+    online: true
+  aa:bb:cc:dd:ee:03:
+    ip: 192.168.1.50
+    hostname: camera-entree
+    vendor: Hikvision
+    custom_name: Caméra entrée
+    location: {floor: RDC, room: hall, rack: null, rack_unit: null}
+    uplink:
+      switch_mac: aa:bb:cc:dd:ee:02
+      switch_port: 4
+      patch_port: 7
+      poe: true
     first_seen: 2026-05-01T10:00:00
     last_seen: 2026-05-24T14:30:00
     online: true
@@ -156,8 +189,8 @@ Quand un scan produit une liste de `DiscoveredHost` et qu'il existe un `inventor
 
 | Situation | Action |
 |---|---|
-| MAC découverte non présente dans l'inventaire | Ajout d'un `Host` avec `custom_name=None`, `location=Location()`, `first_seen=last_seen=now`, `online=true` |
-| MAC découverte déjà présente | Mise à jour de `ip`, `hostname`, `vendor`, `last_seen=now`, `online=true`. **Préserve** `custom_name`, `location`, `first_seen` |
+| MAC découverte non présente dans l'inventaire | Ajout d'un `Host` avec `custom_name=None`, `location=Location()`, `uplink=None`, `first_seen=last_seen=now`, `online=true` |
+| MAC découverte déjà présente | Mise à jour de `ip`, `hostname`, `vendor`, `last_seen=now`, `online=true`. **Préserve** `custom_name`, `location`, `uplink`, `first_seen` |
 | MAC présente dans l'inventaire mais absente du scan | `online=false`. Aucun autre champ modifié |
 
 Le champ `last_scan` de l'`Inventory` est mis à jour à chaque scan.
@@ -180,6 +213,9 @@ Le champ `last_scan` de l'`Inventory` est mis à jour à chaque scan.
    - Le renderer regroupe les hosts par `location.floor` → `location.room` → `location.rack`
    - Hosts sans `floor` (ou tout vide) vont dans un groupe spécial **« non localisé »**
    - Hosts avec `online=false` sont marqués visuellement (style pointillé/grisé selon le format)
+   - Pour chaque host dont `uplink.switch_mac` est défini ET correspond à un host de l'inventaire, une arête est tracée vers ce switch. Les arêtes PoE sont stylisées différemment (couleur/épaisseur).
+   - Les arêtes portent un label avec les ports connus : `sw:<switch_port>` et/ou `pp:<patch_port>` lorsqu'ils sont renseignés.
+   - Les uplinks pointant vers une MAC inconnue (non présente dans l'inventaire) sont silencieusement ignorés.
 3. Écriture des fichiers `output/network.puml` et `output/network.dot`
 
 ### 7.3 Commande `list`
@@ -197,6 +233,9 @@ package "RDC" {
   package "Salon" {
     node "Box internet\n192.168.1.1\naa:bb:cc:dd:ee:01" as h1
   }
+  package "Hall" {
+    node "Caméra entrée\n192.168.1.50\naa:bb:cc:dd:ee:03" as h3
+  }
 }
 package "Sous-sol" {
   package "Local technique" {
@@ -205,15 +244,17 @@ package "Sous-sol" {
     }
   }
 }
-package "Non localisé" {
-  node "?\n192.168.1.50\naa:bb:cc:dd:ee:99" as h3
-}
+h3 -[#orange,thickness=2]- h2 : "sw:4 pp:7 PoE"
 @enduml
 ```
 
-### 7.5 Pas de topologie L2 inférée
+### 7.5 Topologie déclarée à la main, pas inférée
 
-Le diagramme représente un **regroupement par localisation physique** déclarée par l'utilisateur, pas une topologie réseau découverte. On ne tente pas de déterminer quel appareil est branché sur quel port de quel switch (cela nécessiterait du SNMP sur les switches managés, hors portée).
+Les arêtes du diagramme proviennent **uniquement des champs `uplink` saisis par l'utilisateur** dans `inventory.yaml`. IntraMap ne tente jamais d'inférer la topologie réseau (par exemple via SNMP ou LLDP). C'est un choix : le scope reste un réseau domestique/petit bureau où l'utilisateur connaît son câblage et préfère le déclarer plutôt que de gérer une dépendance SNMP.
+
+Conséquences :
+- Un host sans `uplink` n'a aucune arête (cas typique : Wi-Fi, ou câblage non encore documenté).
+- Le regroupement par localisation physique reste l'organisation spatiale dominante du diagramme ; les arêtes traversent les clusters (étage, pièce, baie) selon les uplinks déclarés.
 
 ## 8. CLI
 
@@ -260,16 +301,20 @@ Stratégie : tests unitaires par module, **avec mocks aux frontières externes**
 
 - **`tests/test_models.py`** : normalisation MAC, valeurs par défaut, sérialisation/désérialisation YAML
 - **`tests/test_inventory.py`** (cœur de la logique) :
-  - Nouveau host ajouté avec champs vides
-  - Host existant : préserve `custom_name`, `location`, `first_seen`
+  - Nouveau host ajouté avec champs vides (`uplink=None`)
+  - Host existant : préserve `custom_name`, `location`, `uplink`, `first_seen`
   - Host absent du scan : `online=false`, reste préservé
-  - Round-trip YAML : `save` puis `load` redonne le même `Inventory`
+  - Round-trip YAML : `save` puis `load` redonne le même `Inventory` (avec et sans uplink)
   - Fichier corrompu : lève une exception sans écraser
   - Écriture atomique : simulation de crash en plein write, fichier original intact
 - **`tests/test_renderers.py`** (chaque renderer) :
   - Regroupement floor > room > rack respecté
   - Hosts sans location → groupe « non localisé »
   - Hosts offline marqués visuellement
+  - Arête tracée pour un uplink valide (switch_mac connu dans l'inventaire)
+  - Arête PoE stylisée différemment d'une arête non-PoE
+  - Label d'arête inclut `sw:N` et/ou `pp:N` selon les ports renseignés
+  - Uplink vers une MAC inconnue → aucune arête (silencieux)
   - Caractères spéciaux dans les noms échappés correctement (`"`, retours ligne, etc.)
 - **`tests/test_scanner.py`** (`nmap.PortScanner` mocké) :
   - Parsing résultat nmap → `list[DiscoveredHost]`

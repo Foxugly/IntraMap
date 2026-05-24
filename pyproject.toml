@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intramap"
+version = "0.1.0"
+description = "Scan a local network and render it as a physical-location diagram"
+requires-python = ">=3.11"
+dependencies = [
+    "python-nmap>=0.7.1",
+    "PyYAML>=6.0",
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+intramap = "intramap.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["intramap*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
