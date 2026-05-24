@@ -19,13 +19,21 @@ def normalize_mac(raw: str) -> str:
 
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 
 
-def _parse_dt(value: str | datetime) -> datetime:
-    """Accept either an ISO string or an already-parsed datetime (PyYAML)."""
+def _parse_dt(value: str | datetime | date) -> datetime:
+    """Accept either an ISO string or an already-parsed datetime/date (PyYAML).
+
+    PyYAML auto-parses bare date strings (e.g. ``2026-05-24``) as
+    ``datetime.date`` objects rather than ``datetime.datetime``.  We convert
+    those to midnight datetimes.  The ``datetime`` branch must come first
+    because ``datetime`` is a subclass of ``date``.
+    """
     if isinstance(value, datetime):
         return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day)
     return datetime.fromisoformat(value)
 
 

@@ -116,3 +116,28 @@ def test_load_corrupted_yaml_does_not_overwrite(tmp_path: Path):
     with pytest.raises(yaml.YAMLError):
         load(path)
     assert path.read_text(encoding="utf-8") == bad
+
+
+def test_load_accepts_bare_date_in_yaml(tmp_path: Path):
+    """PyYAML auto-parses 'YYYY-MM-DD' (no time) as a date object; load
+    must accept it (we treat it as midnight)."""
+    path = tmp_path / "inv.yaml"
+    path.write_text(
+        "last_scan: 2026-05-24\n"
+        "hosts:\n"
+        "  aa:bb:cc:dd:ee:01:\n"
+        "    ip: 192.168.1.1\n"
+        "    hostname: null\n"
+        "    vendor: null\n"
+        "    custom_name: null\n"
+        "    location: {floor: null, room: null, rack: null, rack_unit: null}\n"
+        "    uplink: null\n"
+        "    first_seen: 2026-05-01\n"
+        "    last_seen: 2026-05-24\n"
+        "    online: true\n",
+        encoding="utf-8",
+    )
+    inv = load(path)
+    assert inv.last_scan == datetime(2026, 5, 24)
+    assert inv.hosts["aa:bb:cc:dd:ee:01"].first_seen == datetime(2026, 5, 1)
+    assert inv.hosts["aa:bb:cc:dd:ee:01"].last_seen == datetime(2026, 5, 24)
