@@ -34,7 +34,12 @@ def save(inv: Inventory, path: str | Path) -> None:
         dir=str(p.parent),
     )
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        try:
+            f = os.fdopen(fd, "w", encoding="utf-8")
+        except Exception:
+            os.close(fd)
+            raise
+        with f:
             yaml.safe_dump(inv.to_dict(), f, sort_keys=False, allow_unicode=True)
         os.replace(tmp_name, p)
     except Exception:
