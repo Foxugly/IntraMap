@@ -117,8 +117,8 @@ class Host:
 
 @dataclass
 class Inventory:
-    hosts: dict[str, Host]          # clé = MAC normalisée
-    last_scan: datetime
+    hosts: dict[str, Host] = field(default_factory=dict)  # clé = MAC normalisée
+    last_scan: datetime | None = None
 ```
 
 ### 5.2 Identité
@@ -244,7 +244,7 @@ package "Sous-sol" {
     }
   }
 }
-h3 -[#orange,thickness=2]- h2 : "sw:4 pp:7\nPoE"
+h3 -[#orange,thickness=2]- h2 : "sw:4 pp:7 PoE"
 @enduml
 ```
 
