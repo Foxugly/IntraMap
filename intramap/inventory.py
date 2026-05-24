@@ -1,3 +1,5 @@
+import os
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -17,8 +19,27 @@ def load(path: str | Path) -> Inventory:
 
 
 def save(inv: Inventory, path: str | Path) -> None:
-    """Write an Inventory to YAML."""
+    """Write an Inventory to YAML atomically.
+
+    Writes to a temp file in the same directory, then renames over the
+    destination. If anything fails the original file (if any) is preserved.
+    """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(inv.to_dict(), f, sort_keys=False, allow_unicode=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=p.name + ".",
+        suffix=".tmp",
+        dir=str(p.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            yaml.safe_dump(inv.to_dict(), f, sort_keys=False, allow_unicode=True)
+        os.replace(tmp_name, p)
+    except Exception:
+        # On any failure, remove temp file if it still exists
+        if os.path.exists(tmp_name):
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+        raise

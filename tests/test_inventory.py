@@ -1,5 +1,9 @@
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+import yaml
 
 from intramap.inventory import load, save
 from intramap.models import Host, Inventory, Location
@@ -68,3 +72,47 @@ def test_load_normalizes_mac_keys(tmp_path: Path):
     )
     inv = load(path)
     assert "aa:bb:cc:dd:ee:01" in inv.hosts
+
+
+def test_save_is_atomic_no_temp_left_behind(tmp_path: Path):
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host("aa:bb:cc:dd:ee:01", "192.168.1.1"),
+    }, last_scan=datetime(2026, 5, 24))
+    path = tmp_path / "inv.yaml"
+    save(inv, path)
+    # No leftover .tmp file
+    leftovers = list(tmp_path.glob("*.tmp"))
+    assert leftovers == []
+
+
+def test_save_failure_preserves_existing_file(tmp_path: Path):
+    path = tmp_path / "inv.yaml"
+    original_text = "last_scan: null\nhosts: {}\n"
+    path.write_text(original_text, encoding="utf-8")
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host("aa:bb:cc:dd:ee:01", "192.168.1.1"),
+    }, last_scan=datetime(2026, 5, 24))
+
+    with patch("os.replace", side_effect=OSError("disk full")):
+        with pytest.raises(OSError):
+            save(inv, path)
+
+    # Original file untouched
+    assert path.read_text(encoding="utf-8") == original_text
+
+
+def test_load_corrupted_yaml_raises(tmp_path: Path):
+    path = tmp_path / "inv.yaml"
+    path.write_text("hosts: [not, a, mapping\n", encoding="utf-8")  # malformed
+    with pytest.raises(yaml.YAMLError):
+        load(path)
+
+
+def test_load_corrupted_yaml_does_not_overwrite(tmp_path: Path):
+    path = tmp_path / "inv.yaml"
+    bad = "hosts: [not, a, mapping\n"
+    path.write_text(bad, encoding="utf-8")
+    with pytest.raises(yaml.YAMLError):
+        load(path)
+    assert path.read_text(encoding="utf-8") == bad
