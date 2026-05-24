@@ -41,6 +41,8 @@ def test_list_prints_all_hosts(tmp_path: Path, capsys):
     assert "aa:bb:cc:dd:ee:01" in out
     assert "aa:bb:cc:dd:ee:02" in out
     assert "Box internet" in out
+    assert "Sagemcom" in out
+    assert "Cisco" in out
 
 
 def test_list_offline_filters(tmp_path: Path, capsys):

@@ -36,13 +36,14 @@ def _cmd_list(args: argparse.Namespace) -> int:
             mac,
             h.ip or "-",
             h.custom_name or "-",
+            h.vendor or "-",
             h.hostname or "-",
             loc_str,
             "online" if h.online else "OFFLINE",
         ))
 
-    headers = ("MAC", "IP", "Name", "Hostname", "Location", "Status")
-    widths = [max(len(str(r[i])) for r in (rows + [headers])) for i in range(6)]
+    headers = ("MAC", "IP", "Name", "Vendor", "Hostname", "Location", "Status")
+    widths = [max(len(str(r[i])) for r in (rows + [headers])) for i in range(len(headers))]
     fmt = "  ".join(f"{{:<{w}}}" for w in widths)
     print(fmt.format(*headers))
     print(fmt.format(*("-" * w for w in widths)))
