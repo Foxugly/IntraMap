@@ -5,6 +5,26 @@ import pytest
 from intramap.models import DiscoveredHost, Host, Inventory, Location, Uplink, normalize_mac
 
 
+@pytest.fixture
+def make_host_factory():
+    """Return a function that builds a Host with sensible defaults."""
+    from intramap.models import Host, Location  # local import to avoid early failure
+
+    def _make(**kwargs):
+        now = datetime(2026, 5, 25, 0, 0, 0)
+        defaults = dict(
+            mac="aa:bb:cc:dd:ee:01",
+            ip="192.168.1.1",
+            hostname=None,
+            vendor=None,
+            first_seen=now,
+            last_seen=now,
+        )
+        defaults.update(kwargs)
+        return Host(**defaults)
+    return _make
+
+
 @pytest.mark.parametrize("raw, expected", [
     ("aa:bb:cc:dd:ee:ff", "aa:bb:cc:dd:ee:ff"),
     ("AA:BB:CC:DD:EE:FF", "aa:bb:cc:dd:ee:ff"),
@@ -122,3 +142,80 @@ def test_inventory_to_dict_and_from_dict_round_trip_with_uplink():
         patch_port=7,
         poe=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 1: DEVICE_TYPES catalogue + infer_device_type + _resolve_device_type
+# ---------------------------------------------------------------------------
+
+from intramap.models import (
+    DEVICE_TYPES,
+    infer_device_type,
+    _resolve_device_type,
+)
+
+
+def test_device_types_catalogue_is_15_known_values():
+    expected = {
+        "router", "switch", "ap", "controller", "nas",
+        "tv", "stb", "phone", "tablet", "laptop",
+        "iot", "camera", "printer", "voip", "other",
+    }
+    assert DEVICE_TYPES == expected
+
+
+@pytest.mark.parametrize("vendor, expected", [
+    ("Sagemcom Broadband SAS", "router"),
+    ("Vantiva USA", "router"),
+    ("Synology Incorporated", "nas"),
+    ("QNAP Systems", "nas"),
+    ("Cisco Systems", "switch"),
+    ("TP-Link Systems", "ap"),
+    ("LG Electronics", "tv"),
+    ("Samsung Electronics", "tv"),
+    ("Apple Inc", "phone"),
+    ("Hikvision", "camera"),
+    ("Bticino SPA", "camera"),
+    ("Intel Corporate", "laptop"),
+    ("Universal Global Scientific Industrial.", "laptop"),
+    ("Tuya Smart", "iot"),
+    ("tado GmbH", "iot"),
+    ("Davicom Semiconductor", "iot"),
+    ("Grandstream Networks", "voip"),
+    ("Canon Inc", "printer"),
+])
+def test_infer_device_type_known_vendors(vendor, expected):
+    assert infer_device_type(vendor) == expected
+
+
+def test_infer_device_type_case_insensitive():
+    assert infer_device_type("SYNOLOGY INC") == "nas"
+    assert infer_device_type("synology inc") == "nas"
+
+
+def test_infer_device_type_unknown_returns_none():
+    assert infer_device_type("Totally Unknown Vendor Ltd") is None
+
+
+def test_infer_device_type_none_input_returns_none():
+    assert infer_device_type(None) is None
+
+
+def test_resolve_device_type_explicit_wins(make_host_factory):
+    h = make_host_factory(vendor="Synology", device_type="laptop")
+    assert _resolve_device_type(h) == "laptop"
+
+
+def test_resolve_device_type_falls_back_to_inferred(make_host_factory):
+    h = make_host_factory(vendor="Synology Incorporated", device_type=None)
+    assert _resolve_device_type(h) == "nas"
+
+
+def test_resolve_device_type_invalid_explicit_falls_back_to_other(make_host_factory):
+    h = make_host_factory(vendor="Synology Incorporated", device_type="refrigerator")
+    assert _resolve_device_type(h) == "other"
+
+
+def test_resolve_device_type_no_match_no_explicit_returns_other(make_host_factory):
+    h = make_host_factory(vendor="Totally Unknown", device_type=None)
+    assert _resolve_device_type(h) == "other"

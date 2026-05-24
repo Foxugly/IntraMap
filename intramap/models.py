@@ -138,6 +138,61 @@ class Host:
         )
 
 
+DEVICE_TYPES: frozenset[str] = frozenset({
+    "router", "switch", "ap", "controller", "nas",
+    "tv", "stb", "phone", "tablet", "laptop",
+    "iot", "camera", "printer", "voip", "other",
+})
+
+
+# Order matters: first matching pattern wins. Patterns are substring,
+# case-insensitive.
+_VENDOR_PATTERNS: list[tuple[tuple[str, ...], str]] = [
+    (("sagemcom", "vantiva", "technicolor", "arris"), "router"),
+    (("synology", "qnap", "western digital", "seagate"), "nas"),
+    (("cisco", "juniper", "aruba", "mikrotik", "netgear"), "switch"),
+    (("tp-link", "ubiquiti", "unifi"), "ap"),
+    (("lg electronics", "samsung electronics", "sony", "philips"), "tv"),
+    (("apple", "google", "xiaomi", "huawei", "oneplus"), "phone"),
+    (("hikvision", "dahua", "axis", "bticino"), "camera"),
+    (("intel corporate", "dell", "lenovo", "asus", "hp inc",
+      "universal global scientific"), "laptop"),
+    (("tuya", "tado", "nest", "ring", "philips hue",
+      "eedomus", "davicom"), "iot"),
+    (("grandstream", "yealink", "polycom", "snom"), "voip"),
+    (("canon", "epson", "brother industries"), "printer"),
+]
+
+
+def infer_device_type(vendor: str | None) -> str | None:
+    """Map a raw vendor string to a device_type using substring patterns.
+
+    Returns None if no pattern matches or vendor is None.
+    """
+    if not vendor:
+        return None
+    v = vendor.lower()
+    for patterns, device_type in _VENDOR_PATTERNS:
+        for p in patterns:
+            if p in v:
+                return device_type
+    return None
+
+
+def _resolve_device_type(host) -> str:
+    """Return the device_type to use when rendering this host.
+
+    Priority: explicit host.device_type (if in catalogue) > inferred from
+    vendor > 'other'. An explicit value not in the catalogue silently
+    falls back to 'other'.
+    """
+    explicit = getattr(host, "device_type", None)
+    if explicit is not None:
+        return explicit if explicit in DEVICE_TYPES else "other"
+    inferred = infer_device_type(getattr(host, "vendor", None))
+    return inferred or "other"
+
+
 @dataclass
 class Inventory:
     hosts: dict[str, Host] = field(default_factory=dict)
