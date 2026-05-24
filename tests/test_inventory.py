@@ -236,3 +236,73 @@ def test_merge_absent_host_marked_offline():
     assert h.custom_name == "Box"
     assert h.last_seen == earlier
     assert h.first_seen == earlier
+
+
+def test_merge_skips_manual_hosts_in_scan():
+    """A discovered MAC that matches a manual=True host must NOT be updated."""
+    from datetime import datetime
+    from intramap.inventory import merge
+    from intramap.models import DiscoveredHost, Host, Inventory, Location
+
+    earlier = datetime(2026, 5, 1, 10, 0, 0)
+    now = datetime(2026, 5, 25, 14, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01",
+            ip=None,
+            hostname=None,
+            vendor=None,
+            custom_name="Switch principal",
+            location=Location(floor="cave", room="local"),
+            first_seen=earlier,
+            last_seen=earlier,
+            manual=True,
+            online=True,
+        ),
+    }, last_scan=earlier)
+
+    discovered = [DiscoveredHost(mac="aa:bb:cc:dd:ee:01",
+                                 ip="192.168.1.5",
+                                 hostname="something",
+                                 vendor="SomeVendor")]
+    merge(inv, discovered, now=now)
+
+    h = inv.hosts["aa:bb:cc:dd:ee:01"]
+    # NOT updated
+    assert h.ip is None
+    assert h.hostname is None
+    assert h.vendor is None
+    assert h.last_seen == earlier
+    assert h.online is True
+    # preserved
+    assert h.custom_name == "Switch principal"
+    assert h.manual is True
+
+
+def test_merge_does_not_mark_manual_hosts_offline_when_absent():
+    """A manual=True host absent from the scan must remain online=True."""
+    from datetime import datetime
+    from intramap.inventory import merge
+    from intramap.models import Host, Inventory
+
+    earlier = datetime(2026, 5, 1, 10, 0, 0)
+    now = datetime(2026, 5, 25, 14, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01",
+            ip=None,
+            hostname=None,
+            vendor=None,
+            custom_name="Switch principal",
+            first_seen=earlier,
+            last_seen=earlier,
+            manual=True,
+            online=True,
+        ),
+    }, last_scan=earlier)
+
+    merge(inv, [], now=now)
+
+    h = inv.hosts["aa:bb:cc:dd:ee:01"]
+    assert h.online is True  # NOT marked offline
+    assert h.last_seen == earlier  # untouched
