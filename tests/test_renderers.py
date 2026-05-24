@@ -324,3 +324,25 @@ def test_graphviz_uplink_to_unknown_mac_is_silently_skipped():
     out = render_graphviz(inv)
     assert " -- " not in out
     assert "sw:4" not in out
+
+
+def test_all_15_device_type_icons_are_bundled():
+    """Every value in DEVICE_TYPES must have a corresponding SVG file in
+    the package, accessible via importlib.resources."""
+    from importlib.resources import files
+
+    from intramap.models import DEVICE_TYPES
+
+    icons_root = files("intramap.renderers") / "icons"
+    for device_type in DEVICE_TYPES:
+        path = icons_root / f"{device_type}.svg"
+        assert path.is_file(), f"missing icon: {path}"
+
+
+def test_icons_license_is_bundled():
+    from importlib.resources import files
+
+    license_path = files("intramap.renderers") / "icons" / "LICENSE"
+    assert license_path.is_file()
+    content = license_path.read_text(encoding="utf-8")
+    assert "Creative Commons" in content or "CC BY" in content
