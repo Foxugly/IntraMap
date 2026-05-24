@@ -113,3 +113,99 @@ def test_render_missing_inventory_returns_error(tmp_path: Path, capsys):
     captured = capsys.readouterr()
     assert exit_code != 0
     assert "inventory" in (captured.out + captured.err).lower()
+
+
+from unittest.mock import patch
+
+from intramap.models import DiscoveredHost
+
+
+def test_scan_with_explicit_network_creates_inventory(tmp_path: Path):
+    inv_path = tmp_path / "inv.yaml"
+
+    fake_discovered = [
+        DiscoveredHost(mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+                       hostname="box", vendor="Sagemcom"),
+    ]
+    with patch("intramap.cli.scanner.scan", return_value=fake_discovered):
+        exit_code = main([
+            "--inventory", str(inv_path),
+            "scan", "--network", "192.168.1.0/24",
+        ])
+
+    assert exit_code == 0
+    assert inv_path.exists()
+    text = inv_path.read_text(encoding="utf-8")
+    assert "aa:bb:cc:dd:ee:01" in text
+
+
+def test_scan_merges_into_existing_inventory(tmp_path: Path):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_inventory(inv_path)
+
+    fake_discovered = [
+        DiscoveredHost(mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+                       hostname="box", vendor="Sagemcom"),
+        DiscoveredHost(mac="aa:bb:cc:dd:ee:03", ip="192.168.1.3",
+                       hostname="new-device", vendor="Apple"),
+    ]
+    with patch("intramap.cli.scanner.scan", return_value=fake_discovered):
+        exit_code = main([
+            "--inventory", str(inv_path),
+            "scan", "--network", "192.168.1.0/24",
+        ])
+    assert exit_code == 0
+
+    # Reload and check
+    from intramap import inventory as inventory_mod
+    inv = inventory_mod.load(inv_path)
+    # Existing annotated host preserved
+    assert inv.hosts["aa:bb:cc:dd:ee:01"].custom_name == "Box internet"
+    # New host added
+    assert "aa:bb:cc:dd:ee:03" in inv.hosts
+    # Pre-existing host that wasn't rediscovered is now offline
+    assert inv.hosts["aa:bb:cc:dd:ee:02"].online is False
+
+
+def test_scan_auto_detects_single_subnet(tmp_path: Path):
+    inv_path = tmp_path / "inv.yaml"
+    with patch("intramap.cli._detect_subnets", return_value=["192.168.1.0/24"]):
+        with patch("intramap.cli.scanner.scan", return_value=[]) as mock_scan:
+            exit_code = main(["--inventory", str(inv_path), "scan"])
+    assert exit_code == 0
+    mock_scan.assert_called_once_with("192.168.1.0/24")
+
+
+def test_scan_multiple_subnets_requires_explicit_network(tmp_path: Path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    with patch("intramap.cli._detect_subnets",
+               return_value=["192.168.1.0/24", "10.0.0.0/24"]):
+        exit_code = main(["--inventory", str(inv_path), "scan"])
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    err = captured.out + captured.err
+    assert "192.168.1.0/24" in err
+    assert "10.0.0.0/24" in err
+    assert "--network" in err
+
+
+def test_scan_no_subnet_detected_returns_error(tmp_path: Path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    with patch("intramap.cli._detect_subnets", return_value=[]):
+        exit_code = main(["--inventory", str(inv_path), "scan"])
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "--network" in (captured.out + captured.err)
+
+
+def test_scan_propagates_nmap_missing_as_clear_error(tmp_path: Path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    with patch("intramap.cli.scanner.scan",
+               side_effect=RuntimeError("nmap binary not found in PATH...")):
+        exit_code = main([
+            "--inventory", str(inv_path),
+            "scan", "--network", "192.168.1.0/24",
+        ])
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "nmap" in (captured.out + captured.err).lower()

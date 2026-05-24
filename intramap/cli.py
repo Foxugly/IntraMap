@@ -1,8 +1,14 @@
 import argparse
+import ipaddress
+import socket
 import sys
+from datetime import datetime
 from pathlib import Path
 
+import psutil
+
 from intramap import inventory as inventory_mod
+from intramap import scanner
 from intramap.renderers import plantuml as plantuml_renderer
 from intramap.renderers import graphviz as graphviz_renderer
 
@@ -72,6 +78,73 @@ def _cmd_render(args: argparse.Namespace) -> int:
     return 0
 
 
+def _detect_subnets() -> list[str]:
+    """Return candidate IPv4 subnets from active local interfaces.
+
+    Excludes loopback and link-local (169.254.x.x). Each subnet is returned
+    in CIDR form (e.g., '192.168.1.0/24').
+    """
+    candidates: list[str] = []
+    for _ifname, addrs in psutil.net_if_addrs().items():
+        for addr in addrs:
+            if getattr(addr, "family", None) != socket.AF_INET:
+                continue
+            ip = addr.address
+            netmask = addr.netmask
+            if not ip or not netmask:
+                continue
+            try:
+                iface = ipaddress.ip_interface(f"{ip}/{netmask}")
+            except ValueError:
+                continue
+            if iface.ip.is_loopback or iface.ip.is_link_local:
+                continue
+            candidates.append(str(iface.network))
+    return sorted(set(candidates))
+
+
+def _cmd_scan(args: argparse.Namespace) -> int:
+    network = args.network
+    if not network:
+        subnets = _detect_subnets()
+        if len(subnets) == 0:
+            print("No local IPv4 subnet detected. Pass --network explicitly.",
+                  file=sys.stderr)
+            return 2
+        if len(subnets) > 1:
+            print("Multiple local subnets detected:", file=sys.stderr)
+            for s in subnets:
+                print(f"  - {s}", file=sys.stderr)
+            print("Pass --network <CIDR> explicitly.", file=sys.stderr)
+            return 2
+        network = subnets[0]
+        print(f"Auto-detected subnet: {network}")
+
+    try:
+        discovered = scanner.scan(network)
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 3
+
+    inv_path = Path(args.inventory)
+    inv = inventory_mod.load(inv_path)
+    now = datetime.now()
+    previous_macs = set(inv.hosts.keys())
+    inventory_mod.merge(inv, discovered, now=now)
+    inventory_mod.save(inv, inv_path)
+
+    new = [d.mac for d in discovered if d.mac not in previous_macs]
+    offline = [m for m, h in inv.hosts.items() if not h.online]
+    unnamed = [m for m, h in inv.hosts.items() if h.custom_name is None]
+    print(
+        f"Scan complete: {len(discovered)} discovered "
+        f"({len(new)} new), {len(offline)} offline, "
+        f"{len(unnamed)} without custom_name."
+    )
+    print(f"Inventory: {inv_path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="intramap")
     parser.add_argument(
@@ -92,6 +165,11 @@ def build_parser() -> argparse.ArgumentParser:
                           default="all")
     p_render.add_argument("--output-dir", default="output")
     p_render.set_defaults(func=_cmd_render)
+
+    p_scan = subs.add_parser("scan", help="Scan the network and merge results")
+    p_scan.add_argument("--network",
+                        help="CIDR subnet to scan (auto-detected if omitted)")
+    p_scan.set_defaults(func=_cmd_scan)
 
     return parser
 
