@@ -1,6 +1,8 @@
+from datetime import datetime
+
 import pytest
 
-from intramap.models import normalize_mac
+from intramap.models import DiscoveredHost, Host, Inventory, Location, Uplink, normalize_mac
 
 
 @pytest.mark.parametrize("raw, expected", [
@@ -24,11 +26,6 @@ def test_normalize_mac_accepts_common_formats(raw, expected):
 def test_normalize_mac_rejects_invalid(bad):
     with pytest.raises(ValueError):
         normalize_mac(bad)
-
-
-from datetime import datetime
-
-from intramap.models import DiscoveredHost, Host, Inventory, Location, Uplink
 
 
 def test_discovered_host_normalizes_mac():

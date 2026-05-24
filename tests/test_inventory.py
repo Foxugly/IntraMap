@@ -5,8 +5,8 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from intramap.inventory import load, save
-from intramap.models import Host, Inventory, Location
+from intramap.inventory import load, merge, save
+from intramap.models import DiscoveredHost, Host, Inventory, Location, Uplink
 
 
 def make_host(mac: str, ip: str, **kwargs) -> Host:
@@ -141,10 +141,6 @@ def test_load_accepts_bare_date_in_yaml(tmp_path: Path):
     assert inv.last_scan == datetime(2026, 5, 24)
     assert inv.hosts["aa:bb:cc:dd:ee:01"].first_seen == datetime(2026, 5, 1)
     assert inv.hosts["aa:bb:cc:dd:ee:01"].last_seen == datetime(2026, 5, 24)
-
-
-from intramap.inventory import merge
-from intramap.models import DiscoveredHost, Uplink
 
 
 def test_merge_adds_new_host_with_empty_annotations():
