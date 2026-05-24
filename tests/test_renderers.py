@@ -346,3 +346,70 @@ def test_icons_license_is_bundled():
     assert license_path.is_file()
     content = license_path.read_text(encoding="utf-8")
     assert "Creative Commons" in content or "CC BY" in content
+
+
+# ---------------------------------------------------------------------------
+# icons.py — PLANTUML_SPRITES map and copy_icons_to helper
+# ---------------------------------------------------------------------------
+
+import pytest
+
+
+def test_plantuml_sprites_cover_all_device_types():
+    from intramap.models import DEVICE_TYPES
+    from intramap.renderers.icons import PLANTUML_SPRITES
+
+    assert set(PLANTUML_SPRITES.keys()) == set(DEVICE_TYPES)
+
+
+def test_plantuml_sprites_use_known_fa6_names():
+    from intramap.renderers.icons import PLANTUML_SPRITES
+
+    expected = {
+        "router": "network_wired",
+        "switch": "share_nodes",
+        "ap": "wifi",
+        "controller": "sliders",
+        "nas": "hard_drive",
+        "tv": "tv",
+        "stb": "clapperboard",
+        "phone": "mobile_screen_button",
+        "tablet": "tablet_screen_button",
+        "laptop": "laptop",
+        "iot": "house_signal",
+        "camera": "video",
+        "printer": "print",
+        "voip": "phone_volume",
+        "other": "question",
+    }
+    assert PLANTUML_SPRITES == expected
+
+
+def test_copy_icons_to_creates_subdir_and_copies_requested_types(tmp_path):
+    from intramap.renderers.icons import copy_icons_to
+
+    used = {"router", "nas"}
+    copy_icons_to(tmp_path, used)
+
+    icons_dir = tmp_path / "icons"
+    assert icons_dir.is_dir()
+    assert (icons_dir / "router.svg").is_file()
+    assert (icons_dir / "nas.svg").is_file()
+    # Did not copy unused icons
+    assert not (icons_dir / "tv.svg").exists()
+
+
+def test_copy_icons_to_idempotent(tmp_path):
+    from intramap.renderers.icons import copy_icons_to
+
+    copy_icons_to(tmp_path, {"router"})
+    # Second call must not raise (idempotent)
+    copy_icons_to(tmp_path, {"router"})
+    assert (tmp_path / "icons" / "router.svg").is_file()
+
+
+def test_copy_icons_to_unknown_type_raises(tmp_path):
+    from intramap.renderers.icons import copy_icons_to
+
+    with pytest.raises(ValueError, match="refrigerator"):
+        copy_icons_to(tmp_path, {"refrigerator"})
