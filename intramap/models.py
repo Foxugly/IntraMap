@@ -22,6 +22,13 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 
+def _parse_dt(value: str | datetime) -> datetime:
+    """Accept either an ISO string or an already-parsed datetime (PyYAML)."""
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(value)
+
+
 @dataclass
 class Location:
     floor: str | None = None
@@ -103,8 +110,8 @@ class Host:
             custom_name=data.get("custom_name"),
             location=Location(**loc_data),
             uplink=uplink,
-            first_seen=datetime.fromisoformat(data["first_seen"]),
-            last_seen=datetime.fromisoformat(data["last_seen"]),
+            first_seen=_parse_dt(data["first_seen"]),
+            last_seen=_parse_dt(data["last_seen"]),
             online=data.get("online", True),
         )
 
@@ -123,7 +130,7 @@ class Inventory:
     @classmethod
     def from_dict(cls, data: dict) -> "Inventory":
         last_scan_raw = data.get("last_scan")
-        last_scan = datetime.fromisoformat(last_scan_raw) if last_scan_raw else None
+        last_scan = _parse_dt(last_scan_raw) if last_scan_raw else None
         hosts_data = data.get("hosts") or {}
         hosts = {
             normalize_mac(mac): Host.from_dict(normalize_mac(mac), h)
