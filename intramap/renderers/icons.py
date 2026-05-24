@@ -37,16 +37,23 @@ PLANTUML_SPRITES: dict[str, str] = {
 def copy_icons_to(out_dir: str | Path, types: Iterable[str]) -> None:
     """Copy the SVG icons for the given device_types into <out_dir>/icons/.
 
-    Raises ValueError if a requested type is not in DEVICE_TYPES.
+    Raises ValueError (BEFORE creating any files) if a requested type is
+    not in DEVICE_TYPES, so the output directory is never left in a
+    partial state.
     """
+    types_list = list(types)
+    unknown = [t for t in types_list if t not in DEVICE_TYPES]
+    if unknown:
+        raise ValueError(
+            f"Unknown device_type(s): {sorted(set(unknown))!r}"
+        )
+
     out_dir = Path(out_dir)
     icons_out = out_dir / "icons"
     icons_out.mkdir(parents=True, exist_ok=True)
 
     src_root = files("intramap.renderers") / "icons"
-    for t in types:
-        if t not in DEVICE_TYPES:
-            raise ValueError(f"Unknown device_type: {t!r}")
+    for t in types_list:
         src = src_root / f"{t}.svg"
         dst = icons_out / f"{t}.svg"
         with src.open("rb") as fsrc, open(dst, "wb") as fdst:

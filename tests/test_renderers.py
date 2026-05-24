@@ -435,6 +435,20 @@ def test_copy_icons_to_unknown_type_raises(tmp_path):
         copy_icons_to(tmp_path, {"refrigerator"})
 
 
+def test_copy_icons_to_validates_all_types_before_copying(tmp_path):
+    """If any requested type is unknown, no files should be written."""
+    from intramap.renderers.icons import copy_icons_to
+
+    # router is valid, refrigerator is not — the call must fail and leave
+    # no partial state.
+    with pytest.raises(ValueError, match="refrigerator"):
+        copy_icons_to(tmp_path, ["router", "refrigerator"])
+
+    icons_dir = tmp_path / "icons"
+    # No file from the valid type was copied either
+    assert not (icons_dir / "router.svg").exists()
+
+
 # ---------------------------------------------------------------------------
 # PlantUML renderer — sprite emission
 # ---------------------------------------------------------------------------
