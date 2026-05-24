@@ -142,6 +142,12 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         f"{len(unnamed)} without custom_name."
     )
     print(f"Inventory: {inv_path}")
+    if len(discovered) == 0:
+        print(
+            "Warning: scan returned zero hosts. On macOS/Linux, MAC discovery "
+            "(ARP) requires `sudo`. On Windows, run the shell as administrator.",
+            file=sys.stderr,
+        )
     return 0
 
 

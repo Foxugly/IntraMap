@@ -1,11 +1,12 @@
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from intramap.cli import main
 from intramap.inventory import save
-from intramap.models import Host, Inventory, Location
+from intramap.models import DiscoveredHost, Host, Inventory, Location
 
 
 def _seed_inventory(path: Path) -> None:
@@ -115,11 +116,6 @@ def test_render_missing_inventory_returns_error(tmp_path: Path, capsys):
     assert "inventory" in (captured.out + captured.err).lower()
 
 
-from unittest.mock import patch
-
-from intramap.models import DiscoveredHost
-
-
 def test_scan_with_explicit_network_creates_inventory(tmp_path: Path):
     inv_path = tmp_path / "inv.yaml"
 
@@ -209,3 +205,16 @@ def test_scan_propagates_nmap_missing_as_clear_error(tmp_path: Path, capsys):
     captured = capsys.readouterr()
     assert exit_code != 0
     assert "nmap" in (captured.out + captured.err).lower()
+
+
+def test_scan_warns_on_zero_hosts(tmp_path: Path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    with patch("intramap.cli.scanner.scan", return_value=[]):
+        exit_code = main([
+            "--inventory", str(inv_path),
+            "scan", "--network", "192.168.1.0/24",
+        ])
+    captured = capsys.readouterr()
+    assert exit_code == 0  # not an error, just a warning
+    err = captured.err
+    assert "zero hosts" in err.lower() or "sudo" in err.lower() or "administrator" in err.lower()
