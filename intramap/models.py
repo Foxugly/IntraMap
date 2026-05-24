@@ -87,6 +87,8 @@ class Host:
     custom_name: str | None = None
     location: Location = field(default_factory=Location)
     uplink: Uplink | None = None
+    device_type: str | None = None
+    manual: bool = False
     online: bool = True
 
     def __post_init__(self) -> None:
@@ -100,6 +102,8 @@ class Host:
             "custom_name": self.custom_name,
             "location": asdict(self.location),
             "uplink": asdict(self.uplink) if self.uplink is not None else None,
+            "device_type": self.device_type,
+            "manual": self.manual,
             "first_seen": self.first_seen.isoformat(),
             "last_seen": self.last_seen.isoformat(),
             "online": self.online,
@@ -124,6 +128,21 @@ class Host:
                 f"    patch_port: 7\n"
                 f"    poe: true"
             )
+
+        device_type = data.get("device_type")
+        if device_type is not None and not isinstance(device_type, str):
+            raise ValueError(
+                f"Host {mac}: 'device_type' must be a string or null, got "
+                f"{type(device_type).__name__} ({device_type!r})"
+            )
+
+        manual = data.get("manual", False)
+        if not isinstance(manual, bool):
+            raise ValueError(
+                f"Host {mac}: 'manual' must be a boolean (true/false), got "
+                f"{type(manual).__name__} ({manual!r})"
+            )
+
         return cls(
             mac=mac,
             ip=data.get("ip"),
@@ -132,6 +151,8 @@ class Host:
             custom_name=data.get("custom_name"),
             location=Location(**loc_data),
             uplink=uplink,
+            device_type=device_type,
+            manual=manual,
             first_seen=_parse_dt(data["first_seen"]),
             last_seen=_parse_dt(data["last_seen"]),
             online=data.get("online", True),

@@ -219,3 +219,123 @@ def test_resolve_device_type_invalid_explicit_falls_back_to_other(make_host_fact
 def test_resolve_device_type_no_match_no_explicit_returns_other(make_host_factory):
     h = make_host_factory(vendor="Totally Unknown", device_type=None)
     assert _resolve_device_type(h) == "other"
+
+
+# ---------------------------------------------------------------------------
+# Task 2: Host.device_type + Host.manual fields with round-trip and validation
+# ---------------------------------------------------------------------------
+
+def test_host_device_type_defaults_to_none(make_host_factory):
+    h = make_host_factory()
+    assert h.device_type is None
+
+
+def test_host_manual_defaults_to_false(make_host_factory):
+    h = make_host_factory()
+    assert h.manual is False
+
+
+def test_host_to_dict_includes_new_fields(make_host_factory):
+    h = make_host_factory(device_type="nas", manual=True)
+    d = h.to_dict()
+    assert d["device_type"] == "nas"
+    assert d["manual"] is True
+
+
+def test_host_from_dict_reads_new_fields():
+    from intramap.models import Host
+    now = "2026-05-25T00:00:00"
+    data = {
+        "ip": "192.168.1.10",
+        "hostname": None,
+        "vendor": None,
+        "custom_name": None,
+        "location": {"floor": None, "room": None, "rack": None, "rack_unit": None},
+        "uplink": None,
+        "first_seen": now,
+        "last_seen": now,
+        "online": True,
+        "device_type": "nas",
+        "manual": True,
+    }
+    h = Host.from_dict("aa:bb:cc:dd:ee:01", data)
+    assert h.device_type == "nas"
+    assert h.manual is True
+
+
+def test_host_from_dict_missing_new_fields_uses_defaults():
+    """Backward compatibility: existing YAMLs without device_type/manual load
+    with the new defaults (None and False)."""
+    from intramap.models import Host
+    now = "2026-05-25T00:00:00"
+    data = {
+        "ip": "192.168.1.10",
+        "hostname": None,
+        "vendor": None,
+        "custom_name": None,
+        "location": {"floor": None, "room": None, "rack": None, "rack_unit": None},
+        "uplink": None,
+        "first_seen": now,
+        "last_seen": now,
+        "online": True,
+        # no device_type, no manual
+    }
+    h = Host.from_dict("aa:bb:cc:dd:ee:01", data)
+    assert h.device_type is None
+    assert h.manual is False
+
+
+def test_host_from_dict_device_type_bad_type_raises():
+    from intramap.models import Host
+    now = "2026-05-25T00:00:00"
+    data = {
+        "ip": "192.168.1.10",
+        "hostname": None,
+        "vendor": None,
+        "custom_name": None,
+        "location": {"floor": None, "room": None, "rack": None, "rack_unit": None},
+        "uplink": None,
+        "first_seen": now,
+        "last_seen": now,
+        "online": True,
+        "device_type": 42,  # not a string
+    }
+    with pytest.raises(ValueError, match="device_type"):
+        Host.from_dict("aa:bb:cc:dd:ee:01", data)
+
+
+def test_host_from_dict_manual_bad_type_raises():
+    from intramap.models import Host
+    now = "2026-05-25T00:00:00"
+    data = {
+        "ip": "192.168.1.10",
+        "hostname": None,
+        "vendor": None,
+        "custom_name": None,
+        "location": {"floor": None, "room": None, "rack": None, "rack_unit": None},
+        "uplink": None,
+        "first_seen": now,
+        "last_seen": now,
+        "online": True,
+        "manual": "yes",  # not a bool
+    }
+    with pytest.raises(ValueError, match="manual"):
+        Host.from_dict("aa:bb:cc:dd:ee:01", data)
+
+
+def test_host_round_trip_with_new_fields():
+    from intramap.models import Host
+    from datetime import datetime
+    now = datetime(2026, 5, 25, 0, 0, 0)
+    h = Host(
+        mac="aa:bb:cc:dd:ee:01",
+        ip="192.168.1.10",
+        hostname=None,
+        vendor="Synology",
+        first_seen=now,
+        last_seen=now,
+        device_type="nas",
+        manual=True,
+    )
+    restored = Host.from_dict(h.mac, h.to_dict())
+    assert restored == h
