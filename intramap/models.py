@@ -109,7 +109,21 @@ class Host:
     def from_dict(cls, mac: str, data: dict) -> "Host":
         loc_data = data.get("location") or {}
         uplink_data = data.get("uplink")
-        uplink = Uplink(**uplink_data) if uplink_data is not None else None
+        if uplink_data is None:
+            uplink = None
+        elif isinstance(uplink_data, dict):
+            uplink = Uplink(**uplink_data)
+        else:
+            raise ValueError(
+                f"Host {mac}: 'uplink' must be null or a mapping with fields "
+                f"switch_mac/switch_port/patch_port/poe, got "
+                f"{type(uplink_data).__name__} ({uplink_data!r}). Example:\n"
+                f"  uplink:\n"
+                f"    switch_mac: aa:bb:cc:dd:ee:ff\n"
+                f"    switch_port: 4\n"
+                f"    patch_port: 7\n"
+                f"    poe: true"
+            )
         return cls(
             mac=mac,
             ip=data.get("ip"),

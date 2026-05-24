@@ -69,11 +69,91 @@ def test_list_unnamed_filters(tmp_path: Path, capsys):
     assert "aa:bb:cc:dd:ee:01" not in out
 
 
+def test_list_vendor_filter_case_insensitive_substring(tmp_path: Path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_inventory(inv_path)
+
+    # "sagem" matches "Sagemcom" (case-insensitive substring)
+    exit_code = main(["--inventory", str(inv_path), "list", "--vendor", "sagem"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "aa:bb:cc:dd:ee:01" in out  # Sagemcom
+    assert "aa:bb:cc:dd:ee:02" not in out  # Cisco
+
+
+def test_list_vendor_filter_no_match_prints_only_headers(tmp_path: Path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_inventory(inv_path)
+
+    exit_code = main(["--inventory", str(inv_path), "list", "--vendor", "nothing-matches"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "aa:bb:cc:dd:ee:01" not in out
+    assert "aa:bb:cc:dd:ee:02" not in out
+
+
+def test_list_vendor_filter_excludes_hosts_with_no_vendor(tmp_path: Path, capsys):
+    """Hosts with vendor=None (e.g. randomized MACs) are filtered out by --vendor."""
+    now = datetime(2026, 5, 24, 14, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+            hostname=None, vendor="Sagemcom",
+            custom_name=None, location=Location(),
+            first_seen=now, last_seen=now, online=True,
+        ),
+        "52:5f:d3:c2:b4:6e": Host(
+            mac="52:5f:d3:c2:b4:6e", ip="192.168.1.81",
+            hostname=None, vendor=None,  # randomized MAC, no OUI match
+            custom_name=None, location=Location(),
+            first_seen=now, last_seen=now, online=True,
+        ),
+    }, last_scan=now)
+    inv_path = tmp_path / "inv.yaml"
+    save(inv, inv_path)
+
+    exit_code = main(["--inventory", str(inv_path), "list", "--vendor", "sagem"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "aa:bb:cc:dd:ee:01" in out
+    assert "52:5f:d3:c2:b4:6e" not in out
+
+
 def test_list_missing_inventory_returns_clear_error(tmp_path: Path, capsys):
     exit_code = main(["--inventory", str(tmp_path / "absent.yaml"), "list"])
     captured = capsys.readouterr()
     assert exit_code != 0
     assert "inventory" in (captured.out + captured.err).lower()
+
+
+def test_list_invalid_uplink_shape_gives_clear_error(tmp_path: Path, capsys):
+    """A user hand-editing inventory.yaml with `uplink: true` (instead of a
+    mapping) should see a clear error pointing at the offending host and
+    showing the expected format, not a Python traceback."""
+    inv_path = tmp_path / "inv.yaml"
+    inv_path.write_text(
+        "last_scan: 2026-05-24T14:00:00\n"
+        "hosts:\n"
+        "  aa:bb:cc:dd:ee:01:\n"
+        "    ip: 192.168.1.1\n"
+        "    hostname: null\n"
+        "    vendor: null\n"
+        "    custom_name: null\n"
+        "    location: {floor: null, room: null, rack: null, rack_unit: null}\n"
+        "    uplink: true\n"
+        "    first_seen: 2026-05-01T10:00:00\n"
+        "    last_seen: 2026-05-24T14:00:00\n"
+        "    online: true\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["--inventory", str(inv_path), "list"])
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    err = captured.err
+    assert "uplink" in err.lower()
+    assert "aa:bb:cc:dd:ee:01" in err
+    assert "switch_mac" in err  # the example format is shown
 
 
 def test_render_writes_both_files_by_default(tmp_path: Path):

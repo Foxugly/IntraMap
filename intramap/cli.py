@@ -13,20 +13,34 @@ from intramap.renderers import plantuml as plantuml_renderer
 from intramap.renderers import graphviz as graphviz_renderer
 
 
-def _cmd_list(args: argparse.Namespace) -> int:
-    inv_path = Path(args.inventory)
+def _load_or_report(inv_path: Path):
+    """Return the Inventory, or (None, exit_code) on a user-visible failure."""
     if not inv_path.exists():
         print(f"Inventory file not found: {inv_path}", file=sys.stderr)
         print("Run `intramap scan` first to create one.", file=sys.stderr)
-        return 2
+        return None, 2
+    try:
+        return inventory_mod.load(inv_path), 0
+    except Exception as e:
+        print(f"Failed to load inventory {inv_path}:\n{e}", file=sys.stderr)
+        return None, 4
 
-    inv = inventory_mod.load(inv_path)
+
+def _cmd_list(args: argparse.Namespace) -> int:
+    inv, err = _load_or_report(Path(args.inventory))
+    if err:
+        return err
+
     rows = []
     for mac in sorted(inv.hosts.keys()):
         h = inv.hosts[mac]
         if args.offline and h.online:
             continue
         if args.unnamed and h.custom_name is not None:
+            continue
+        if args.vendor and (
+            h.vendor is None or args.vendor.lower() not in h.vendor.lower()
+        ):
             continue
         loc = h.location
         loc_str = "/".join(
@@ -53,13 +67,10 @@ def _cmd_list(args: argparse.Namespace) -> int:
 
 
 def _cmd_render(args: argparse.Namespace) -> int:
-    inv_path = Path(args.inventory)
-    if not inv_path.exists():
-        print(f"Inventory file not found: {inv_path}", file=sys.stderr)
-        print("Run `intramap scan` first to create one.", file=sys.stderr)
-        return 2
+    inv, err = _load_or_report(Path(args.inventory))
+    if err:
+        return err
 
-    inv = inventory_mod.load(inv_path)
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -128,7 +139,14 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         return 3
 
     inv_path = Path(args.inventory)
-    inv = inventory_mod.load(inv_path)
+    try:
+        inv = inventory_mod.load(inv_path)
+    except Exception as e:
+        print(f"Failed to load existing inventory {inv_path}:\n{e}",
+              file=sys.stderr)
+        print("Fix the file (or remove it to start fresh) and re-run.",
+              file=sys.stderr)
+        return 4
     now = datetime.now()
     previous_macs = set(inv.hosts.keys())
     inventory_mod.merge(inv, discovered, now=now)
@@ -165,6 +183,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Only show hosts currently offline")
     p_list.add_argument("--unnamed", action="store_true",
                         help="Only show hosts with no custom_name")
+    p_list.add_argument("--vendor", default=None,
+                        help="Only show hosts whose vendor contains the given "
+                             "substring (case-insensitive). Hosts without a "
+                             "vendor are excluded.")
     p_list.set_defaults(func=_cmd_list)
 
     p_render = subs.add_parser("render", help="Render diagrams from inventory")
