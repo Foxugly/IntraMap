@@ -1,3 +1,4 @@
+import pytest
 from datetime import datetime
 
 from intramap.models import Host, Inventory, Location, Uplink
@@ -13,6 +14,27 @@ def make_host(mac: str, ip: str, *, custom_name=None, location=None,
         uplink=uplink,
         first_seen=now, last_seen=now, online=online,
     )
+
+
+@pytest.fixture
+def make_host_factory():
+    """Return a function that builds a Host with sensible defaults."""
+    from intramap.models import Host
+
+    def _make(**kwargs):
+        from datetime import datetime
+        now = datetime(2026, 5, 25, 0, 0, 0)
+        defaults = dict(
+            mac="aa:bb:cc:dd:ee:01",
+            ip="192.168.1.1",
+            hostname=None,
+            vendor=None,
+            first_seen=now,
+            last_seen=now,
+        )
+        defaults.update(kwargs)
+        return Host(**defaults)
+    return _make
 
 
 def test_plantuml_groups_by_floor_room_rack():
@@ -89,8 +111,8 @@ def test_plantuml_escapes_double_quotes_in_names():
 
     out = render_plantuml(inv)
     assert 'PC \\"test\\"' in out
-    # Make sure the surrounding label quotes aren't broken
-    assert '"PC \\"test\\"' in out
+    # Make sure the surrounding label quotes aren't broken; sprite prefix precedes the name
+    assert '"<$question>\\nPC \\"test\\"' in out
 
 
 def test_plantuml_uses_mac_when_no_custom_name():
@@ -352,8 +374,6 @@ def test_icons_license_is_bundled():
 # icons.py — PLANTUML_SPRITES map and copy_icons_to helper
 # ---------------------------------------------------------------------------
 
-import pytest
-
 
 def test_plantuml_sprites_cover_all_device_types():
     from intramap.models import DEVICE_TYPES
@@ -413,3 +433,125 @@ def test_copy_icons_to_unknown_type_raises(tmp_path):
 
     with pytest.raises(ValueError, match="refrigerator"):
         copy_icons_to(tmp_path, {"refrigerator"})
+
+
+# ---------------------------------------------------------------------------
+# PlantUML renderer — sprite emission
+# ---------------------------------------------------------------------------
+
+def test_plantuml_emits_include_per_used_sprite(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom",
+        ),
+    })
+    out = render(inv)
+
+    assert "!include <font-awesome-6/hard_drive>" in out
+    assert "!include <font-awesome-6/network_wired>" in out
+
+
+def test_plantuml_includes_are_lexicographically_sorted(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",  # nas -> hard_drive
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom",  # router -> network_wired
+        ),
+    })
+    out = render(inv)
+
+    pos_hard = out.index("hard_drive")
+    pos_net = out.index("network_wired")
+    assert pos_hard < pos_net
+
+
+def test_plantuml_dedupes_includes(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="QNAP",
+        ),
+    })
+    out = render(inv)
+
+    assert out.count("!include <font-awesome-6/hard_drive>") == 1
+
+
+def test_plantuml_node_label_starts_with_sprite(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+            custom_name="NAS",
+        ),
+    })
+    out = render(inv)
+
+    assert '"<$hard_drive>\\nNAS' in out
+
+
+def test_plantuml_unknown_vendor_uses_question_sprite(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor=None,
+        ),
+    })
+    out = render(inv)
+
+    assert "!include <font-awesome-6/question>" in out
+    assert "<$question>" in out
+
+
+def test_plantuml_explicit_device_type_overrides_inference(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01",
+            vendor="TP-Link Systems",  # would infer 'ap' -> 'wifi'
+            device_type="controller",  # override -> 'sliders'
+        ),
+    })
+    out = render(inv)
+
+    assert "<$sliders>" in out
+    assert "<$wifi>" not in out
+
+
+def test_plantuml_invalid_device_type_falls_back_to_question(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01",
+            vendor="Synology",
+            device_type="refrigerator",  # not in catalogue
+        ),
+    })
+    out = render(inv)
+
+    assert "<$question>" in out
+    assert "<$hard_drive>" not in out
