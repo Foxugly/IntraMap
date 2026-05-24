@@ -71,3 +71,45 @@ def test_list_missing_inventory_returns_clear_error(tmp_path: Path, capsys):
     captured = capsys.readouterr()
     assert exit_code != 0
     assert "inventory" in (captured.out + captured.err).lower()
+
+
+def test_render_writes_both_files_by_default(tmp_path: Path):
+    inv_path = tmp_path / "inv.yaml"
+    out_dir = tmp_path / "output"
+    _seed_inventory(inv_path)
+
+    exit_code = main([
+        "--inventory", str(inv_path),
+        "render", "--output-dir", str(out_dir),
+    ])
+    assert exit_code == 0
+    assert (out_dir / "network.puml").exists()
+    assert (out_dir / "network.dot").exists()
+    assert "@startuml" in (out_dir / "network.puml").read_text(encoding="utf-8")
+    assert "graph network" in (out_dir / "network.dot").read_text(encoding="utf-8")
+
+
+def test_render_format_plantuml_only(tmp_path: Path):
+    inv_path = tmp_path / "inv.yaml"
+    out_dir = tmp_path / "output"
+    _seed_inventory(inv_path)
+
+    exit_code = main([
+        "--inventory", str(inv_path),
+        "render", "--format", "plantuml",
+        "--output-dir", str(out_dir),
+    ])
+    assert exit_code == 0
+    assert (out_dir / "network.puml").exists()
+    assert not (out_dir / "network.dot").exists()
+
+
+def test_render_missing_inventory_returns_error(tmp_path: Path, capsys):
+    out_dir = tmp_path / "output"
+    exit_code = main([
+        "--inventory", str(tmp_path / "absent.yaml"),
+        "render", "--output-dir", str(out_dir),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "inventory" in (captured.out + captured.err).lower()

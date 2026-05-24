@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 
 from intramap import inventory as inventory_mod
+from intramap.renderers import plantuml as plantuml_renderer
+from intramap.renderers import graphviz as graphviz_renderer
 
 
 def _cmd_list(args: argparse.Namespace) -> int:
@@ -43,6 +45,33 @@ def _cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_render(args: argparse.Namespace) -> int:
+    inv_path = Path(args.inventory)
+    if not inv_path.exists():
+        print(f"Inventory file not found: {inv_path}", file=sys.stderr)
+        print("Run `intramap scan` first to create one.", file=sys.stderr)
+        return 2
+
+    inv = inventory_mod.load(inv_path)
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    targets = {
+        "plantuml": (out_dir / "network.puml", plantuml_renderer.render),
+        "graphviz": (out_dir / "network.dot", graphviz_renderer.render),
+    }
+    if args.format == "all":
+        chosen = list(targets.keys())
+    else:
+        chosen = [args.format]
+
+    for name in chosen:
+        path, fn = targets[name]
+        path.write_text(fn(inv), encoding="utf-8")
+        print(f"Wrote {path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="intramap")
     parser.add_argument(
@@ -57,6 +86,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.add_argument("--unnamed", action="store_true",
                         help="Only show hosts with no custom_name")
     p_list.set_defaults(func=_cmd_list)
+
+    p_render = subs.add_parser("render", help="Render diagrams from inventory")
+    p_render.add_argument("--format", choices=["plantuml", "graphviz", "all"],
+                          default="all")
+    p_render.add_argument("--output-dir", default="output")
+    p_render.set_defaults(func=_cmd_render)
 
     return parser
 
