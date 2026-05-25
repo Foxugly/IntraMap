@@ -64,15 +64,29 @@ When you run `intramap render`, the diagram will draw an edge from this host to 
 
 ## Rendering the diagrams to images
 
-IntraMap only writes the `.puml` and `.dot` files. Convert them to PNG/SVG with:
+The easiest way — `intramap render --image` invokes `dot` automatically with the correct working directory so the bundled icons resolve:
 
 ```bash
+intramap render --image           # writes network.puml, network.dot, network.svg, network.png + icons/
+```
+
+This requires Graphviz (`dot`) in PATH. If it's missing, you get a clear warning and the text files are still produced.
+
+Alternatively, do it by hand. **Important**: `dot` must be run from inside the output directory, otherwise the relative `image="icons/<type>.png"` paths in the .dot file won't resolve:
+
+```bash
+# Graphviz — run from inside output/
+cd output && dot -Tsvg network.dot -o network.svg && cd ..
+
 # PlantUML (requires plantuml.jar or a local install)
 plantuml output/network.puml
-
-# Graphviz
-dot -Tsvg output/network.dot -o output/network.svg
 ```
+
+The PlantUML output is self-contained (sprites resolved by PlantUML's stdlib) and doesn't need a special working directory.
+
+### Diagram layout
+
+The layout is top-to-bottom (`rankdir=TB` in Graphviz, `top to bottom direction` in PlantUML). The hierarchy only becomes visible once you declare `uplink` and/or `wifi_ap_mac` fields on your hosts — with no edges, the layout engine has nothing to rank, and hosts will be packed into clusters by location only.
 
 ## How the inventory is organised
 

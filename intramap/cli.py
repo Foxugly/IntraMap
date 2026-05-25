@@ -1,6 +1,8 @@
 import argparse
 import ipaddress
+import shutil
 import socket
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -96,7 +98,43 @@ def _cmd_render(args: argparse.Namespace) -> int:
             text = plantuml_renderer.render(inv)
         path.write_text(text, encoding="utf-8")
         print(f"Wrote {path}")
+
+    if args.image and "graphviz" in chosen:
+        _render_graphviz_image(out_dir)
     return 0
+
+
+def _render_graphviz_image(out_dir: Path) -> None:
+    """Invoke `dot` to produce network.svg and network.png next to network.dot.
+
+    Runs with CWD set to `out_dir` so the relative `image="icons/<type>.png"`
+    paths in the .dot file resolve. If `dot` is not in PATH, prints a clear
+    warning to stderr and returns (text files were already written).
+    """
+    dot_exe = shutil.which("dot")
+    if dot_exe is None:
+        print(
+            "Warning: 'dot' (Graphviz) not found in PATH. Skipping image "
+            "rendering. Install from https://graphviz.org/download/ or run "
+            f"`dot` manually from {out_dir}.",
+            file=sys.stderr,
+        )
+        return
+
+    for fmt in ("svg", "png"):
+        result = subprocess.run(
+            [dot_exe, f"-T{fmt}", "network.dot", "-o", f"network.{fmt}"],
+            cwd=str(out_dir),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            print(f"Wrote {out_dir / f'network.{fmt}'}")
+        else:
+            print(
+                f"dot failed for {fmt}: {result.stderr.strip()}",
+                file=sys.stderr,
+            )
 
 
 def _detect_subnets() -> list[str]:
@@ -205,6 +243,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_render.add_argument("--format", choices=["plantuml", "graphviz", "all"],
                           default="all")
     p_render.add_argument("--output-dir", default="output")
+    p_render.add_argument(
+        "--image", action="store_true",
+        help="After writing text files, also invoke `dot` to produce "
+             "network.svg and network.png (requires Graphviz in PATH). "
+             "Runs dot with CWD set to the output dir so icons resolve.",
+    )
     p_render.set_defaults(func=_cmd_render)
 
     p_scan = subs.add_parser("scan", help="Scan the network and merge results")

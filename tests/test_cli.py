@@ -455,3 +455,78 @@ def test_render_graphviz_writes_icons_subdir(tmp_path):
     assert rc == 0
     assert (out_dir / "network.dot").is_file()
     assert (out_dir / "icons" / "nas.png").is_file()
+
+
+def test_render_image_invokes_dot_with_output_cwd(tmp_path):
+    """`--image` must invoke `dot` with CWD set to the output directory so
+    that relative image="icons/..." paths in the .dot file resolve."""
+    from datetime import datetime
+    from unittest.mock import patch
+    from intramap.cli import main
+    from intramap.inventory import save
+    from intramap.models import Host, Inventory
+
+    now = datetime(2026, 5, 25, 0, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+            hostname=None, vendor="Synology",
+            first_seen=now, last_seen=now,
+        ),
+    })
+    inv_path = tmp_path / "inv.yaml"
+    save(inv, inv_path)
+    out_dir = tmp_path / "out"
+
+    # Pretend dot is installed and succeeds
+    with patch("intramap.cli.shutil.which", return_value="/fake/dot"), \
+         patch("intramap.cli.subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stderr = ""
+
+        rc = main([
+            "--inventory", str(inv_path),
+            "render", "--image",
+            "--output-dir", str(out_dir),
+        ])
+
+    assert rc == 0
+    # dot called at least twice (svg + png)
+    assert mock_run.call_count >= 2
+    # All calls used out_dir as CWD
+    for call in mock_run.call_args_list:
+        assert call.kwargs.get("cwd") == str(out_dir)
+
+
+def test_render_image_warns_when_dot_missing(tmp_path, capsys):
+    """If `dot` is not in PATH, --image emits a clear warning but still
+    succeeds (text files were written)."""
+    from datetime import datetime
+    from unittest.mock import patch
+    from intramap.cli import main
+    from intramap.inventory import save
+    from intramap.models import Host, Inventory
+
+    now = datetime(2026, 5, 25, 0, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+            hostname=None, vendor="Synology",
+            first_seen=now, last_seen=now,
+        ),
+    })
+    inv_path = tmp_path / "inv.yaml"
+    save(inv, inv_path)
+    out_dir = tmp_path / "out"
+
+    with patch("intramap.cli.shutil.which", return_value=None):
+        rc = main([
+            "--inventory", str(inv_path),
+            "render", "--image",
+            "--output-dir", str(out_dir),
+        ])
+
+    captured = capsys.readouterr()
+    assert rc == 0  # text files still written, image is best-effort
+    assert "dot" in captured.err.lower()
+    assert (out_dir / "network.dot").is_file()
