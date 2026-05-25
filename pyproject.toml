@@ -23,7 +23,7 @@ intramap = "intramap.cli:main"
 include = ["intramap*"]
 
 [tool.setuptools.package-data]
-"intramap.renderers" = ["icons/*.svg", "icons/LICENSE"]
+"intramap.renderers" = ["icons/*.svg", "icons/*.png", "icons/LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

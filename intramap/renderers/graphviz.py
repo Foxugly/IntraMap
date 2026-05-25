@@ -90,7 +90,7 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
         attrs = [
             f'label={_html_label(host)}',
             f'tooltip="{_tooltip(host)}"',
-            f'image="icons/{device_type}.svg"',
+            f'image="icons/{device_type}.png"',
             'labelloc="b"',
             'imagescale=true',
             f'fillcolor="{fillcolor}"',
@@ -176,7 +176,7 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
         for t in used_types:
             color = DEVICE_COLORS[t]
             lines.append(
-                f'    legend_{t} [label="{t}", image="icons/{t}.svg", '
+                f'    legend_{t} [label="{t}", image="icons/{t}.png", '
                 f'labelloc=b, imagescale=true, fillcolor="{color}", style=filled];'
             )
         lines.append('    legend_wired [label="─── wired", shape=plaintext];')

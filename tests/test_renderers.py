@@ -360,8 +360,12 @@ def test_all_15_device_type_icons_are_bundled():
 
     icons_root = files("intramap.renderers") / "icons"
     for device_type in DEVICE_TYPES:
-        path = icons_root / f"{device_type}.svg"
-        assert path.is_file(), f"missing icon: {path}"
+        svg_path = icons_root / f"{device_type}.svg"
+        png_path = icons_root / f"{device_type}.png"
+        assert svg_path.is_file(), f"missing SVG icon: {svg_path}"
+        # PNG is the format actually used by Graphviz (svg:cairo plugin is
+        # often unavailable in Windows builds)
+        assert png_path.is_file(), f"missing PNG icon: {png_path}"
 
 
 def test_icons_license_is_bundled():
@@ -416,10 +420,10 @@ def test_copy_icons_to_creates_subdir_and_copies_requested_types(tmp_path):
 
     icons_dir = tmp_path / "icons"
     assert icons_dir.is_dir()
-    assert (icons_dir / "router.svg").is_file()
-    assert (icons_dir / "nas.svg").is_file()
+    assert (icons_dir / "router.png").is_file()
+    assert (icons_dir / "nas.png").is_file()
     # Did not copy unused icons
-    assert not (icons_dir / "tv.svg").exists()
+    assert not (icons_dir / "tv.png").exists()
 
 
 def test_copy_icons_to_idempotent(tmp_path):
@@ -428,7 +432,7 @@ def test_copy_icons_to_idempotent(tmp_path):
     copy_icons_to(tmp_path, {"router"})
     # Second call must not raise (idempotent)
     copy_icons_to(tmp_path, {"router"})
-    assert (tmp_path / "icons" / "router.svg").is_file()
+    assert (tmp_path / "icons" / "router.png").is_file()
 
 
 def test_copy_icons_to_unknown_type_raises(tmp_path):
@@ -449,7 +453,7 @@ def test_copy_icons_to_validates_all_types_before_copying(tmp_path):
 
     icons_dir = tmp_path / "icons"
     # No file from the valid type was copied either
-    assert not (icons_dir / "router.svg").exists()
+    assert not (icons_dir / "router.png").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -586,7 +590,7 @@ def test_graphviz_emits_image_attribute(make_host_factory):
     })
     out = render(inv)
 
-    assert 'image="icons/nas.svg"' in out
+    assert 'image="icons/nas.png"' in out
     assert 'labelloc="b"' in out
     assert "imagescale=true" in out
 
@@ -604,8 +608,8 @@ def test_graphviz_explicit_device_type_overrides_inference(make_host_factory):
     })
     out = render(inv)
 
-    assert 'image="icons/controller.svg"' in out
-    assert 'image="icons/ap.svg"' not in out
+    assert 'image="icons/controller.png"' in out
+    assert 'image="icons/ap.png"' not in out
 
 
 def test_graphviz_unknown_vendor_uses_other_icon(make_host_factory):
@@ -619,7 +623,7 @@ def test_graphviz_unknown_vendor_uses_other_icon(make_host_factory):
     })
     out = render(inv)
 
-    assert 'image="icons/other.svg"' in out
+    assert 'image="icons/other.png"' in out
 
 
 def test_graphviz_offline_host_keeps_image_and_uses_dashed_style(make_host_factory):
@@ -634,7 +638,7 @@ def test_graphviz_offline_host_keeps_image_and_uses_dashed_style(make_host_facto
     })
     out = render(inv)
 
-    assert 'image="icons/nas.svg"' in out
+    assert 'image="icons/nas.png"' in out
     assert "dashed" in out
 
 
@@ -652,8 +656,8 @@ def test_graphviz_copy_assets_to_writes_icons(tmp_path, make_host_factory):
     })
     out = render(inv, copy_assets_to=tmp_path)
 
-    assert (tmp_path / "icons" / "nas.svg").is_file()
-    assert (tmp_path / "icons" / "router.svg").is_file()
+    assert (tmp_path / "icons" / "nas.png").is_file()
+    assert (tmp_path / "icons" / "router.png").is_file()
     # No copy when copy_assets_to is None: covered by other tests that
     # didn't pass the arg.
 

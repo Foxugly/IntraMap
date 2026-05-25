@@ -3,9 +3,11 @@
 `PLANTUML_SPRITES` maps each `device_type` to the FontAwesome 6 sprite name
 that PlantUML's stdlib exposes via `!include <font-awesome-6/<sprite>>`.
 
-`copy_icons_to(out_dir, types)` copies the SVG files of the requested types
+`copy_icons_to(out_dir, types)` copies the PNG files of the requested types
 from the package's bundled icons into `<out_dir>/icons/` for Graphviz to
-reference at render time.
+reference at render time. PNGs are used (not SVGs) because most Graphviz
+Windows builds ship without the svg:cairo loadimage plugin and therefore
+cannot read SVG via `image=`.
 """
 import shutil
 from importlib.resources import files
@@ -72,7 +74,7 @@ def copy_icons_to(out_dir: str | Path, types: Iterable[str]) -> None:
 
     src_root = files("intramap.renderers") / "icons"
     for t in types_list:
-        src = src_root / f"{t}.svg"
-        dst = icons_out / f"{t}.svg"
+        src = src_root / f"{t}.png"
+        dst = icons_out / f"{t}.png"
         with src.open("rb") as fsrc, open(dst, "wb") as fdst:
             shutil.copyfileobj(fsrc, fdst)

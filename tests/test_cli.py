@@ -454,4 +454,4 @@ def test_render_graphviz_writes_icons_subdir(tmp_path):
 
     assert rc == 0
     assert (out_dir / "network.dot").is_file()
-    assert (out_dir / "icons" / "nas.svg").is_file()
+    assert (out_dir / "icons" / "nas.png").is_file()
