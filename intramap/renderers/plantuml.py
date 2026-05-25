@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from intramap.models import Host, Inventory, Uplink, _resolve_device_type
-from intramap.renderers.icons import PLANTUML_SPRITES
+from intramap.renderers.icons import PLANTUML_SPRITES, DEVICE_COLORS
 
 
 _UNLOCALISED = "Non localisé"
@@ -74,8 +74,13 @@ def render(inv: Inventory) -> str:
         node_id = node_ids[host.mac]
         sprite = PLANTUML_SPRITES[_resolve_device_type(host)]
         label = f"<${sprite}>\\n{_label(host)}"
+        if host.online:
+            color = DEVICE_COLORS[_resolve_device_type(host)]
+            color_suffix = f" {color}"
+        else:
+            color_suffix = ""
         lines.append(
-            f'{indent}node "{label}" as {node_id}{stereotype}'
+            f'{indent}node "{label}" as {node_id}{stereotype}{color_suffix}'
         )
 
     for floor in sorted(tree.keys()):

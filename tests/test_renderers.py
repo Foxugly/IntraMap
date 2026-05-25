@@ -702,3 +702,32 @@ def test_device_colors_use_expected_palette():
         "other": "#cccccc",
     }
     assert DEVICE_COLORS == expected
+
+
+def test_plantuml_online_host_has_color_suffix(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    # device_type=nas → color #9467bd appears after node ID
+    assert "#9467bd" in out
+
+
+def test_plantuml_offline_host_has_no_color_suffix(make_host_factory):
+    """Offline hosts keep their <<offline>> stereotype unmodified — no color
+    suffix is appended (stereotype dominates the look)."""
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            vendor="Synology", online=False,
+        ),
+    })
+    out = render(inv)
+    assert "<<offline>>" in out
+    nas_color_lines = [l for l in out.splitlines() if "#9467bd" in l]
+    assert nas_color_lines == []
