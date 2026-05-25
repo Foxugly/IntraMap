@@ -168,6 +168,19 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
             f'label="Wi-Fi", fontsize=10];'
         )
 
+    used_types = sorted({_resolve_device_type(h) for h in inv.hosts.values()})
+    if used_types:
+        lines.append('  subgraph cluster_legend {')
+        lines.append('    label="Légende";')
+        lines.append('    style=dashed;')
+        for t in used_types:
+            color = DEVICE_COLORS[t]
+            lines.append(
+                f'    legend_{t} [label="{t}", image="icons/{t}.svg", '
+                f'labelloc=b, imagescale=true, fillcolor="{color}", style=filled];'
+            )
+        lines.append("  }")
+
     lines.append("}")
 
     if copy_assets_to is not None:

@@ -954,3 +954,30 @@ def test_plantuml_legend_only_lists_used_types(make_host_factory):
     # 'nas' is in the legend, but 'router' is not (no router in inventory)
     assert "nas" in legend
     assert "router" not in legend
+
+
+def test_graphviz_emits_legend_cluster(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    assert 'subgraph cluster_legend' in out
+    assert 'label="Légende"' in out
+    # used type appears
+    assert "legend_nas" in out
+
+
+def test_graphviz_legend_only_lists_used_types(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    legend = out.split('subgraph cluster_legend', 1)[1]
+    assert "legend_nas" in legend
+    assert "legend_router" not in legend
