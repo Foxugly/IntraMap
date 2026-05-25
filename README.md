@@ -90,7 +90,10 @@ The layout is top-to-bottom (`rankdir=TB` in Graphviz, `top to bottom direction`
 
 ## How the inventory is organised
 
-`inventory.yaml` is your source of truth — versioned in git, edited by hand. Each scan merges into it:
+`inventory.yaml` is your source of truth — edited by hand, and kept local: it's
+listed in `.gitignore` because it holds your real network's MAC addresses, IPs,
+and topology, which usually shouldn't be pushed to a shared/public repo. Each
+scan merges into it:
 
 - New MAC → host added with empty `custom_name`, `location`, `uplink`. Edit them manually.
 - Known MAC → IP / hostname / vendor / `last_seen` updated; your annotations preserved.
