@@ -672,3 +672,33 @@ def test_graphviz_has_top_bottom_rankdir():
     out = render(inv)
     assert "rankdir=TB" in out
     assert "splines=ortho" in out
+
+
+def test_device_colors_cover_all_device_types():
+    from intramap.models import DEVICE_TYPES
+    from intramap.renderers.icons import DEVICE_COLORS
+
+    assert set(DEVICE_COLORS.keys()) == set(DEVICE_TYPES)
+
+
+def test_device_colors_use_expected_palette():
+    from intramap.renderers.icons import DEVICE_COLORS
+
+    expected = {
+        "router": "#1f77b4",
+        "switch": "#2ca02c",
+        "ap": "#2ca02c",
+        "controller": "#2ca02c",
+        "nas": "#9467bd",
+        "tv": "#ff7f0e",
+        "stb": "#ff7f0e",
+        "phone": "#7f7f7f",
+        "tablet": "#7f7f7f",
+        "laptop": "#7f7f7f",
+        "iot": "#e377c2",
+        "camera": "#e377c2",
+        "voip": "#bcbd22",
+        "printer": "#bcbd22",
+        "other": "#cccccc",
+    }
+    assert DEVICE_COLORS == expected
