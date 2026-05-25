@@ -89,10 +89,13 @@ class Host:
     uplink: Uplink | None = None
     device_type: str | None = None
     manual: bool = False
+    wifi_ap_mac: str | None = None
     online: bool = True
 
     def __post_init__(self) -> None:
         self.mac = normalize_mac(self.mac)
+        if self.wifi_ap_mac is not None:
+            self.wifi_ap_mac = normalize_mac(self.wifi_ap_mac)
 
     def to_dict(self) -> dict:
         return {
@@ -104,6 +107,7 @@ class Host:
             "uplink": asdict(self.uplink) if self.uplink is not None else None,
             "device_type": self.device_type,
             "manual": self.manual,
+            "wifi_ap_mac": self.wifi_ap_mac,
             "first_seen": self.first_seen.isoformat(),
             "last_seen": self.last_seen.isoformat(),
             "online": self.online,
@@ -143,6 +147,13 @@ class Host:
                 f"{type(manual).__name__} ({manual!r})"
             )
 
+        wifi_ap_mac = data.get("wifi_ap_mac")
+        if wifi_ap_mac is not None and not isinstance(wifi_ap_mac, str):
+            raise ValueError(
+                f"Host {mac}: 'wifi_ap_mac' must be a string or null, got "
+                f"{type(wifi_ap_mac).__name__} ({wifi_ap_mac!r})"
+            )
+
         return cls(
             mac=mac,
             ip=data.get("ip"),
@@ -153,6 +164,7 @@ class Host:
             uplink=uplink,
             device_type=device_type,
             manual=manual,
+            wifi_ap_mac=wifi_ap_mac,
             first_seen=_parse_dt(data["first_seen"]),
             last_seen=_parse_dt(data["last_seen"]),
             online=data.get("online", True),

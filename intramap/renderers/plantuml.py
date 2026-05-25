@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from intramap.models import Host, Inventory, Uplink, _resolve_device_type
-from intramap.renderers.icons import PLANTUML_SPRITES
+from intramap.renderers.icons import PLANTUML_SPRITES, DEVICE_COLORS
 
 
 _UNLOCALISED = "Non localisé"
@@ -14,8 +14,10 @@ def _escape(text: str) -> str:
 
 def _label(host: Host) -> str:
     name = host.custom_name or host.mac
-    ip = host.ip or "?"
-    lines = [name, ip, host.mac]
+    lines = [name]
+    if host.ip:
+        lines.append(host.ip)
+    lines.append(host.mac)
     return _escape("\\n".join(lines))
 
 
@@ -60,6 +62,7 @@ def render(inv: Inventory) -> str:
 
     lines: list[str] = [
         "@startuml",
+        "top to bottom direction",
         "skinparam node<<offline>> {",
         "  BackgroundColor #DDDDDD",
         "  BorderColor #888888",
@@ -73,8 +76,13 @@ def render(inv: Inventory) -> str:
         node_id = node_ids[host.mac]
         sprite = PLANTUML_SPRITES[_resolve_device_type(host)]
         label = f"<${sprite}>\\n{_label(host)}"
+        if host.online:
+            color = DEVICE_COLORS[_resolve_device_type(host)]
+            color_suffix = f" {color}"
+        else:
+            color_suffix = ""
         lines.append(
-            f'{indent}node "{label}" as {node_id}{stereotype}'
+            f'{indent}node "{label}" as {node_id}{stereotype}{color_suffix}'
         )
 
     for floor in sorted(tree.keys()):
@@ -115,6 +123,29 @@ def render(inv: Inventory) -> str:
         label = _edge_label(u)
         label_part = f' : "{_escape(label)}"' if label else ""
         lines.append(f"{src} {style} {dst}{label_part}")
+
+    # Edges from Wi-Fi associations
+    for mac in sorted(inv.hosts.keys()):
+        host = inv.hosts[mac]
+        if host.wifi_ap_mac is None:
+            continue
+        if host.wifi_ap_mac not in node_ids:
+            continue
+        src = node_ids[host.mac]
+        dst = node_ids[host.wifi_ap_mac]
+        lines.append(f'{src} ..> {dst} : "Wi-Fi"')
+
+    used_types = sorted({_resolve_device_type(h) for h in inv.hosts.values()})
+    if used_types:
+        lines.append('package "Légende" {')
+        for t in used_types:
+            sprite = PLANTUML_SPRITES[t]
+            color = DEVICE_COLORS[t]
+            lines.append(
+                f'  node "<${sprite}>\\n{t}" as legend_{t} {color}'
+            )
+        lines.append('  note "**Edges:**\\n─── wired\\n━━━ PoE (orange)\\n┄┄┄ Wi-Fi (blue)" as legend_edges')
+        lines.append("}")
 
     lines.append("@enduml")
     return "\n".join(lines) + "\n"

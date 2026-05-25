@@ -339,3 +339,74 @@ def test_host_round_trip_with_new_fields():
     )
     restored = Host.from_dict(h.mac, h.to_dict())
     assert restored == h
+
+
+# ---------------------------------------------------------------------------
+# Task 5: Host.wifi_ap_mac field
+# ---------------------------------------------------------------------------
+
+def test_host_wifi_ap_mac_defaults_to_none(make_host_factory):
+    h = make_host_factory()
+    assert h.wifi_ap_mac is None
+
+
+def test_host_wifi_ap_mac_normalized(make_host_factory):
+    h = make_host_factory(wifi_ap_mac="AA-BB-CC-DD-EE-02")
+    assert h.wifi_ap_mac == "aa:bb:cc:dd:ee:02"
+
+
+def test_host_to_dict_includes_wifi_ap_mac(make_host_factory):
+    h = make_host_factory(wifi_ap_mac="aa:bb:cc:dd:ee:02")
+    d = h.to_dict()
+    assert d["wifi_ap_mac"] == "aa:bb:cc:dd:ee:02"
+
+
+def test_host_from_dict_reads_wifi_ap_mac():
+    from intramap.models import Host
+    now = "2026-05-25T00:00:00"
+    data = {
+        "ip": "192.168.1.10", "hostname": None, "vendor": None,
+        "custom_name": None,
+        "location": {"floor": None, "room": None, "rack": None, "rack_unit": None},
+        "uplink": None, "device_type": None, "manual": False,
+        "wifi_ap_mac": "aa:bb:cc:dd:ee:02",
+        "first_seen": now, "last_seen": now, "online": True,
+    }
+    h = Host.from_dict("aa:bb:cc:dd:ee:01", data)
+    assert h.wifi_ap_mac == "aa:bb:cc:dd:ee:02"
+
+
+def test_host_from_dict_missing_wifi_ap_mac_defaults_to_none():
+    from intramap.models import Host
+    now = "2026-05-25T00:00:00"
+    data = {
+        "ip": "192.168.1.10", "hostname": None, "vendor": None,
+        "custom_name": None,
+        "location": {"floor": None, "room": None, "rack": None, "rack_unit": None},
+        "uplink": None, "device_type": None, "manual": False,
+        "first_seen": now, "last_seen": now, "online": True,
+    }
+    h = Host.from_dict("aa:bb:cc:dd:ee:01", data)
+    assert h.wifi_ap_mac is None
+
+
+def test_host_from_dict_wifi_ap_mac_bad_type_raises():
+    from intramap.models import Host
+    now = "2026-05-25T00:00:00"
+    data = {
+        "ip": "192.168.1.10", "hostname": None, "vendor": None,
+        "custom_name": None,
+        "location": {"floor": None, "room": None, "rack": None, "rack_unit": None},
+        "uplink": None, "device_type": None, "manual": False,
+        "wifi_ap_mac": 42,  # not a string
+        "first_seen": now, "last_seen": now, "online": True,
+    }
+    with pytest.raises(ValueError, match="wifi_ap_mac"):
+        Host.from_dict("aa:bb:cc:dd:ee:01", data)
+
+
+def test_host_round_trip_with_wifi_ap_mac(make_host_factory):
+    from intramap.models import Host
+    h = make_host_factory(wifi_ap_mac="aa:bb:cc:dd:ee:02")
+    restored = Host.from_dict(h.mac, h.to_dict())
+    assert restored == h

@@ -100,6 +100,32 @@ Hosts are identified by MAC address (stable across IP/hostname changes).
 pytest
 ```
 
+## Wi-Fi associations and visual hints
+
+Declare a Wi-Fi association on any host by setting `wifi_ap_mac` to the MAC
+of the upstream access point (must be a host in the inventory):
+
+```yaml
+aa:bb:cc:dd:ee:03:
+  ip: 192.168.1.50
+  custom_name: iPhone
+  wifi_ap_mac: aa:bb:cc:dd:ee:01   # MAC of the AP
+  # ... other fields ...
+```
+
+The renderer draws a dashed edge labeled "Wi-Fi" from the host to the AP.
+A host can have both a wired `uplink` and a `wifi_ap_mac` — both edges are
+drawn.
+
+### Diagram features
+
+- Hierarchical top-to-bottom layout
+- Node color by device category (router, switch, NAS, IoT, etc.)
+- PoE edges drawn in orange, Wi-Fi edges drawn dashed blue
+- Auto-generated legend cluster at the bottom of each diagram
+- Cleaner labels with smaller IP/MAC text
+- Graphviz SVG output includes `<title>` tooltips with vendor and last-seen info
+
 ## Acknowledgements
 
 Icons by [Font Awesome](https://fontawesome.com/), licensed under

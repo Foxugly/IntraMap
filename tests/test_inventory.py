@@ -306,3 +306,26 @@ def test_merge_does_not_mark_manual_hosts_offline_when_absent():
     h = inv.hosts["aa:bb:cc:dd:ee:01"]
     assert h.online is True  # NOT marked offline
     assert h.last_seen == earlier  # untouched
+
+
+def test_merge_preserves_wifi_ap_mac():
+    """An existing host's wifi_ap_mac must not be overwritten by a re-scan."""
+    from datetime import datetime
+    from intramap.inventory import merge
+    from intramap.models import DiscoveredHost, Host, Inventory
+
+    earlier = datetime(2026, 5, 1, 10, 0, 0)
+    now = datetime(2026, 5, 25, 14, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.10",
+            hostname="old-host", vendor="OldVendor",
+            wifi_ap_mac="aa:bb:cc:dd:ee:99",
+            first_seen=earlier, last_seen=earlier,
+        ),
+    })
+    merge(inv, [DiscoveredHost(mac="aa:bb:cc:dd:ee:01", ip="192.168.1.11",
+                               hostname="new", vendor="NewVendor")], now=now)
+    h = inv.hosts["aa:bb:cc:dd:ee:01"]
+    assert h.ip == "192.168.1.11"  # updated
+    assert h.wifi_ap_mac == "aa:bb:cc:dd:ee:99"  # preserved

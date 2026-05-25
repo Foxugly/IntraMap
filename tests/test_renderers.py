@@ -270,7 +270,7 @@ def test_graphviz_offline_host_dashed():
         ),
     }, last_scan=datetime(2026, 5, 24))
     out = render_graphviz(inv)
-    assert "style=dashed" in out
+    assert "dashed" in out
 
 
 def test_graphviz_escapes_double_quotes():
@@ -282,7 +282,10 @@ def test_graphviz_escapes_double_quotes():
         ),
     }, last_scan=datetime(2026, 5, 24))
     out = render_graphviz(inv)
-    assert 'PC \\"test\\"' in out
+    # HTML labels don't need backslash-escaped quotes; the name appears verbatim
+    assert 'PC "test"' in out
+    # The node label is HTML format (angle brackets), not text format (quotes)
+    assert "label=<" in out
 
 
 def test_graphviz_draws_edge_for_valid_uplink():
@@ -632,7 +635,7 @@ def test_graphviz_offline_host_keeps_image_and_uses_dashed_style(make_host_facto
     out = render(inv)
 
     assert 'image="icons/nas.svg"' in out
-    assert "style=dashed" in out
+    assert "dashed" in out
 
 
 def test_graphviz_copy_assets_to_writes_icons(tmp_path, make_host_factory):
@@ -653,3 +656,360 @@ def test_graphviz_copy_assets_to_writes_icons(tmp_path, make_host_factory):
     assert (tmp_path / "icons" / "router.svg").is_file()
     # No copy when copy_assets_to is None: covered by other tests that
     # didn't pass the arg.
+
+
+def test_plantuml_has_top_to_bottom_direction():
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory()
+    out = render(inv)
+    assert "top to bottom direction" in out
+
+
+def test_graphviz_has_top_bottom_rankdir():
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory()
+    out = render(inv)
+    assert "rankdir=TB" in out
+    assert "splines=ortho" in out
+
+
+def test_device_colors_cover_all_device_types():
+    from intramap.models import DEVICE_TYPES
+    from intramap.renderers.icons import DEVICE_COLORS
+
+    assert set(DEVICE_COLORS.keys()) == set(DEVICE_TYPES)
+
+
+def test_device_colors_use_expected_palette():
+    from intramap.renderers.icons import DEVICE_COLORS
+
+    expected = {
+        "router": "#1f77b4",
+        "switch": "#2ca02c",
+        "ap": "#2ca02c",
+        "controller": "#2ca02c",
+        "nas": "#9467bd",
+        "tv": "#ff7f0e",
+        "stb": "#ff7f0e",
+        "phone": "#7f7f7f",
+        "tablet": "#7f7f7f",
+        "laptop": "#7f7f7f",
+        "iot": "#e377c2",
+        "camera": "#e377c2",
+        "voip": "#bcbd22",
+        "printer": "#bcbd22",
+        "other": "#cccccc",
+    }
+    assert DEVICE_COLORS == expected
+
+
+def test_plantuml_online_host_has_color_suffix(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    # device_type=nas → color #9467bd appears after node ID
+    assert "#9467bd" in out
+
+
+def test_plantuml_offline_host_has_no_color_suffix(make_host_factory):
+    """Offline hosts keep their <<offline>> stereotype unmodified — no color
+    suffix is appended (stereotype dominates the look)."""
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            vendor="Synology", online=False,
+        ),
+    })
+    out = render(inv)
+    assert "<<offline>>" in out
+    # Color must not appear on host nodes; legend nodes (legend_*) are exempt.
+    nas_color_lines = [
+        l for l in out.splitlines()
+        if "#9467bd" in l and "legend_" not in l
+    ]
+    assert nas_color_lines == []
+
+
+def test_graphviz_online_host_has_fillcolor(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    assert 'fillcolor="#9467bd"' in out
+    assert "style=filled" in out
+
+
+def test_graphviz_offline_host_keeps_color_but_dashed(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            vendor="Synology", online=False,
+        ),
+    })
+    out = render(inv)
+    assert 'fillcolor="#9467bd"' in out
+    # offline combines filled and dashed
+    assert 'style="filled,dashed"' in out
+
+
+def test_plantuml_draws_wifi_edge_when_valid(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="TP-Link Systems",
+            custom_name="AP RDC",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+            custom_name="iPhone",
+            wifi_ap_mac="aa:bb:cc:dd:ee:01",
+        ),
+    })
+    out = render(inv)
+    assert "..>" in out  # PlantUML dashed arrow
+    assert "Wi-Fi" in out
+
+
+def test_plantuml_wifi_edge_to_unknown_mac_skipped(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+            wifi_ap_mac="ff:ff:ff:ff:ff:ff",
+        ),
+    })
+    out = render(inv)
+    # No Wi-Fi edge arrow should be emitted (legend may still mention "Wi-Fi")
+    assert "..>" not in out
+    assert ' : "Wi-Fi"' not in out
+
+
+def test_graphviz_draws_wifi_edge_when_valid(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="TP-Link",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+            wifi_ap_mac="aa:bb:cc:dd:ee:01",
+        ),
+    })
+    out = render(inv)
+    assert "style=dashed" in out
+    assert "Wi-Fi" in out
+
+
+def test_graphviz_wifi_edge_to_unknown_mac_skipped(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+            wifi_ap_mac="ff:ff:ff:ff:ff:ff",
+        ),
+    })
+    out = render(inv)
+    # No Wi-Fi edge should be drawn. Wi-Fi edges have a unique combination of
+    # style=dashed with color="#1f77b4" (the legend node uses fontcolor, not color).
+    assert 'style=dashed, color="#1f77b4"' not in out
+
+
+def test_host_with_both_uplink_and_wifi_gets_two_edges(make_host_factory):
+    """A laptop docked via Ethernet + associated to Wi-Fi backup should
+    show BOTH edges in the diagram."""
+    from intramap.models import Inventory, Uplink
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="TP-Link",  # AP
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Cisco",  # switch
+            device_type="switch",
+        ),
+        "aa:bb:cc:dd:ee:03": make_host_factory(
+            mac="aa:bb:cc:dd:ee:03", vendor="Intel Corporate",  # laptop
+            uplink=Uplink(switch_mac="aa:bb:cc:dd:ee:02", switch_port=5),
+            wifi_ap_mac="aa:bb:cc:dd:ee:01",
+        ),
+    })
+    out = render(inv)
+    assert "Wi-Fi" in out
+    assert "sw:5" in out
+
+
+def test_plantuml_label_omits_ip_when_null(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", ip=None,
+            custom_name="Switch principal", vendor=None,
+        ),
+    })
+    out = render(inv)
+    assert "aa:bb:cc:dd:ee:01" in out
+    assert "Switch principal\\nNone" not in out
+    assert "Switch principal\\n?" not in out
+
+
+def test_graphviz_uses_html_labels(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", custom_name="NAS",
+            vendor="Synology",
+        ),
+    })
+    out = render(inv)
+    # HTML labels start with < not " (Graphviz convention)
+    assert "label=<" in out
+    # Bold tag for the name
+    assert "<B>NAS</B>" in out
+    # Smaller font for IP / MAC
+    assert "<BR/>" in out
+
+
+def test_graphviz_html_label_omits_ip_when_null(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", ip=None,
+            custom_name="Switch", vendor=None,
+        ),
+    })
+    out = render(inv)
+    assert "aa:bb:cc:dd:ee:01" in out
+    # No literal "None" leaking into the label
+    assert ">None<" not in out
+
+
+def test_graphviz_has_tooltip(make_host_factory):
+    from datetime import datetime
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    last = datetime(2026, 5, 24, 10, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+            last_seen=last,
+        ),
+    })
+    out = render(inv)
+    assert "tooltip=" in out
+    assert "Synology" in out
+    assert "2026-05-24" in out
+
+
+def test_plantuml_emits_legend_cluster(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    assert 'package "Légende"' in out
+    # the used device_type appears in the legend
+    assert "legend_nas" in out or "nas" in out.split('package "Légende"', 1)[1]
+
+
+def test_plantuml_legend_only_lists_used_types(make_host_factory):
+    """Legend only mentions device_types actually present in the inventory."""
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),  # nas only
+    })
+    out = render(inv)
+    legend = out.split('package "Légende"', 1)[1]
+    # 'nas' is in the legend, but 'router' is not (no router in inventory)
+    assert "nas" in legend
+    assert "router" not in legend
+
+
+def test_graphviz_emits_legend_cluster(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    assert 'subgraph cluster_legend' in out
+    assert 'label="Légende"' in out
+    # used type appears
+    assert "legend_nas" in out
+
+
+def test_graphviz_legend_only_lists_used_types(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    legend = out.split('subgraph cluster_legend', 1)[1]
+    assert "legend_nas" in legend
+    assert "legend_router" not in legend
+
+
+def test_plantuml_legend_includes_edge_styles(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    legend = out.split('package "Légende"', 1)[1]
+    # Edge style legend mentions all 3 edge types
+    assert "wired" in legend
+    assert "PoE" in legend
+    assert "Wi-Fi" in legend
+
+
+def test_graphviz_legend_includes_edge_styles(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    legend = out.split("subgraph cluster_legend", 1)[1]
+    assert "legend_wired" in legend
+    assert "legend_poe" in legend
+    assert "legend_wifi" in legend

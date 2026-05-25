@@ -2,7 +2,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from intramap.models import Host, Inventory, Uplink, _resolve_device_type
-from intramap.renderers.icons import copy_icons_to
+from intramap.renderers.icons import copy_icons_to, DEVICE_COLORS
 
 
 _UNLOCALISED = "Non localisé"
@@ -13,10 +13,28 @@ def _escape(text: str) -> str:
     return text.replace('"', '\\"')
 
 
-def _label(host: Host) -> str:
-    name = host.custom_name or host.mac
-    ip = host.ip or "?"
-    return _escape(f"{name}\\n{ip}\\n{host.mac}")
+def _escape_html(text: str) -> str:
+    return (text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;"))
+
+
+def _html_label(host: Host) -> str:
+    """Build a Graphviz HTML label with differentiated text sizes."""
+    name = _escape_html(host.custom_name or host.mac)
+    parts = [f"<B>{name}</B>"]
+    if host.ip:
+        parts.append(f'<FONT POINT-SIZE="10">{_escape_html(host.ip)}</FONT>')
+    parts.append(
+        f'<FONT POINT-SIZE="9" COLOR="#666666">{_escape_html(host.mac)}</FONT>'
+    )
+    return "<" + "<BR/>".join(parts) + ">"
+
+
+def _tooltip(host: Host) -> str:
+    vendor = host.vendor or "unknown"
+    last = host.last_seen.date().isoformat()
+    return f"{vendor} | last seen {last}"
 
 
 def _bucket(host: Host) -> tuple[str, str, str | None]:
@@ -56,19 +74,31 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
         floor, room, rack = _bucket(host)
         tree[floor][room][rack].append(host)
 
-    lines: list[str] = ["graph network {", "  node [shape=box];"]
+    lines: list[str] = [
+        "graph network {",
+        "  rankdir=TB;",
+        "  splines=ortho;",
+        "  nodesep=0.5;",
+        "  ranksep=0.8;",
+        "  node [shape=box];",
+    ]
     cluster_id = 0
 
     def render_host(host: Host, indent: str) -> None:
         device_type = _resolve_device_type(host)
+        fillcolor = DEVICE_COLORS[device_type]
         attrs = [
-            f'label="{_label(host)}"',
+            f'label={_html_label(host)}',
+            f'tooltip="{_tooltip(host)}"',
             f'image="icons/{device_type}.svg"',
             'labelloc="b"',
             'imagescale=true',
+            f'fillcolor="{fillcolor}"',
         ]
-        if not host.online:
-            attrs.append("style=dashed")
+        if host.online:
+            attrs.append("style=filled")
+        else:
+            attrs.append('style="filled,dashed"')
             attrs.append('color="#888888"')
         node_id = node_ids[host.mac]
         lines.append(f'{indent}{node_id} [{", ".join(attrs)}];')
@@ -123,6 +153,36 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
             attrs.append("penwidth=2")
         attrs_str = f' [{", ".join(attrs)}]' if attrs else ""
         lines.append(f"  {node_ids[host.mac]} -- {node_ids[u.switch_mac]}{attrs_str};")
+
+    # Edges from Wi-Fi associations
+    for mac in sorted(inv.hosts.keys()):
+        host = inv.hosts[mac]
+        if host.wifi_ap_mac is None:
+            continue
+        if host.wifi_ap_mac not in node_ids:
+            continue
+        src = node_ids[host.mac]
+        dst = node_ids[host.wifi_ap_mac]
+        lines.append(
+            f'  {src} -- {dst} [style=dashed, color="#1f77b4", '
+            f'label="Wi-Fi", fontsize=10];'
+        )
+
+    used_types = sorted({_resolve_device_type(h) for h in inv.hosts.values()})
+    if used_types:
+        lines.append('  subgraph cluster_legend {')
+        lines.append('    label="Légende";')
+        lines.append('    style=dashed;')
+        for t in used_types:
+            color = DEVICE_COLORS[t]
+            lines.append(
+                f'    legend_{t} [label="{t}", image="icons/{t}.svg", '
+                f'labelloc=b, imagescale=true, fillcolor="{color}", style=filled];'
+            )
+        lines.append('    legend_wired [label="─── wired", shape=plaintext];')
+        lines.append('    legend_poe [label="━━━ PoE", shape=plaintext, fontcolor="#ff7f0e"];')
+        lines.append('    legend_wifi [label="┄┄┄ Wi-Fi", shape=plaintext, fontcolor="#1f77b4"];')
+        lines.append("  }")
 
     lines.append("}")
 

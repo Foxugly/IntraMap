@@ -59,7 +59,7 @@ def merge(inv: Inventory, discovered: Iterable[DiscoveredHost],
     - New MAC: added with empty custom_name/location/uplink,
       first_seen=last_seen=now, manual=False
     - Existing MAC, manual=False: ip/hostname/vendor/last_seen updated,
-      online=True; custom_name/location/uplink/first_seen preserved
+      online=True; custom_name/location/uplink/wifi_ap_mac/first_seen preserved
     - Existing MAC, manual=True: ignored entirely (no update, no offline marking)
     - Existing MAC absent from discovered, manual=False: online=False, other fields preserved
     """
