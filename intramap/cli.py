@@ -9,6 +9,7 @@ import psutil
 
 from intramap import inventory as inventory_mod
 from intramap import scanner
+from intramap.models import _resolve_device_type
 from intramap.renderers import plantuml as plantuml_renderer
 from intramap.renderers import graphviz as graphviz_renderer
 
@@ -50,13 +51,14 @@ def _cmd_list(args: argparse.Namespace) -> int:
             mac,
             h.ip or "-",
             h.custom_name or "-",
+            _resolve_device_type(h),
             h.vendor or "-",
             h.hostname or "-",
             loc_str,
             "online" if h.online else "OFFLINE",
         ))
 
-    headers = ("MAC", "IP", "Name", "Vendor", "Hostname", "Location", "Status")
+    headers = ("MAC", "IP", "Name", "Type", "Vendor", "Hostname", "Location", "Status")
     widths = [max(len(str(r[i])) for r in (rows + [headers])) for i in range(len(headers))]
     fmt = "  ".join(f"{{:<{w}}}" for w in widths)
     print(fmt.format(*headers))
