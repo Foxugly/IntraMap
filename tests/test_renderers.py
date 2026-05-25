@@ -1,3 +1,4 @@
+import pytest
 from datetime import datetime
 
 from intramap.models import Host, Inventory, Location, Uplink
@@ -13,6 +14,27 @@ def make_host(mac: str, ip: str, *, custom_name=None, location=None,
         uplink=uplink,
         first_seen=now, last_seen=now, online=online,
     )
+
+
+@pytest.fixture
+def make_host_factory():
+    """Return a function that builds a Host with sensible defaults."""
+    from intramap.models import Host
+
+    def _make(**kwargs):
+        from datetime import datetime
+        now = datetime(2026, 5, 25, 0, 0, 0)
+        defaults = dict(
+            mac="aa:bb:cc:dd:ee:01",
+            ip="192.168.1.1",
+            hostname=None,
+            vendor=None,
+            first_seen=now,
+            last_seen=now,
+        )
+        defaults.update(kwargs)
+        return Host(**defaults)
+    return _make
 
 
 def test_plantuml_groups_by_floor_room_rack():
@@ -89,8 +111,8 @@ def test_plantuml_escapes_double_quotes_in_names():
 
     out = render_plantuml(inv)
     assert 'PC \\"test\\"' in out
-    # Make sure the surrounding label quotes aren't broken
-    assert '"PC \\"test\\"' in out
+    # Make sure the surrounding label quotes aren't broken; sprite prefix precedes the name
+    assert '"<$question>\\nPC \\"test\\"' in out
 
 
 def test_plantuml_uses_mac_when_no_custom_name():
@@ -324,3 +346,310 @@ def test_graphviz_uplink_to_unknown_mac_is_silently_skipped():
     out = render_graphviz(inv)
     assert " -- " not in out
     assert "sw:4" not in out
+
+
+def test_all_15_device_type_icons_are_bundled():
+    """Every value in DEVICE_TYPES must have a corresponding SVG file in
+    the package, accessible via importlib.resources."""
+    from importlib.resources import files
+
+    from intramap.models import DEVICE_TYPES
+
+    icons_root = files("intramap.renderers") / "icons"
+    for device_type in DEVICE_TYPES:
+        path = icons_root / f"{device_type}.svg"
+        assert path.is_file(), f"missing icon: {path}"
+
+
+def test_icons_license_is_bundled():
+    from importlib.resources import files
+
+    license_path = files("intramap.renderers") / "icons" / "LICENSE"
+    assert license_path.is_file()
+    content = license_path.read_text(encoding="utf-8")
+    assert "Creative Commons" in content or "CC BY" in content
+
+
+# ---------------------------------------------------------------------------
+# icons.py — PLANTUML_SPRITES map and copy_icons_to helper
+# ---------------------------------------------------------------------------
+
+
+def test_plantuml_sprites_cover_all_device_types():
+    from intramap.models import DEVICE_TYPES
+    from intramap.renderers.icons import PLANTUML_SPRITES
+
+    assert set(PLANTUML_SPRITES.keys()) == set(DEVICE_TYPES)
+
+
+def test_plantuml_sprites_use_known_fa6_names():
+    from intramap.renderers.icons import PLANTUML_SPRITES
+
+    expected = {
+        "router": "network_wired",
+        "switch": "share_nodes",
+        "ap": "wifi",
+        "controller": "sliders",
+        "nas": "hard_drive",
+        "tv": "tv",
+        "stb": "clapperboard",
+        "phone": "mobile_screen_button",
+        "tablet": "tablet_screen_button",
+        "laptop": "laptop",
+        "iot": "house_signal",
+        "camera": "video",
+        "printer": "print",
+        "voip": "phone_volume",
+        "other": "question",
+    }
+    assert PLANTUML_SPRITES == expected
+
+
+def test_copy_icons_to_creates_subdir_and_copies_requested_types(tmp_path):
+    from intramap.renderers.icons import copy_icons_to
+
+    used = {"router", "nas"}
+    copy_icons_to(tmp_path, used)
+
+    icons_dir = tmp_path / "icons"
+    assert icons_dir.is_dir()
+    assert (icons_dir / "router.svg").is_file()
+    assert (icons_dir / "nas.svg").is_file()
+    # Did not copy unused icons
+    assert not (icons_dir / "tv.svg").exists()
+
+
+def test_copy_icons_to_idempotent(tmp_path):
+    from intramap.renderers.icons import copy_icons_to
+
+    copy_icons_to(tmp_path, {"router"})
+    # Second call must not raise (idempotent)
+    copy_icons_to(tmp_path, {"router"})
+    assert (tmp_path / "icons" / "router.svg").is_file()
+
+
+def test_copy_icons_to_unknown_type_raises(tmp_path):
+    from intramap.renderers.icons import copy_icons_to
+
+    with pytest.raises(ValueError, match="refrigerator"):
+        copy_icons_to(tmp_path, {"refrigerator"})
+
+
+def test_copy_icons_to_validates_all_types_before_copying(tmp_path):
+    """If any requested type is unknown, no files should be written."""
+    from intramap.renderers.icons import copy_icons_to
+
+    # router is valid, refrigerator is not — the call must fail and leave
+    # no partial state.
+    with pytest.raises(ValueError, match="refrigerator"):
+        copy_icons_to(tmp_path, ["router", "refrigerator"])
+
+    icons_dir = tmp_path / "icons"
+    # No file from the valid type was copied either
+    assert not (icons_dir / "router.svg").exists()
+
+
+# ---------------------------------------------------------------------------
+# PlantUML renderer — sprite emission
+# ---------------------------------------------------------------------------
+
+def test_plantuml_emits_include_per_used_sprite(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom",
+        ),
+    })
+    out = render(inv)
+
+    assert "!include <font-awesome-6/hard_drive>" in out
+    assert "!include <font-awesome-6/network_wired>" in out
+
+
+def test_plantuml_includes_are_lexicographically_sorted(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",  # nas -> hard_drive
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom",  # router -> network_wired
+        ),
+    })
+    out = render(inv)
+
+    pos_hard = out.index("hard_drive")
+    pos_net = out.index("network_wired")
+    assert pos_hard < pos_net
+
+
+def test_plantuml_dedupes_includes(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="QNAP",
+        ),
+    })
+    out = render(inv)
+
+    assert out.count("!include <font-awesome-6/hard_drive>") == 1
+
+
+def test_plantuml_node_label_starts_with_sprite(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+            custom_name="NAS",
+        ),
+    })
+    out = render(inv)
+
+    assert '"<$hard_drive>\\nNAS' in out
+
+
+def test_plantuml_unknown_vendor_uses_question_sprite(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor=None,
+        ),
+    })
+    out = render(inv)
+
+    assert "!include <font-awesome-6/question>" in out
+    assert "<$question>" in out
+
+
+def test_plantuml_explicit_device_type_overrides_inference(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01",
+            vendor="TP-Link Systems",  # would infer 'ap' -> 'wifi'
+            device_type="controller",  # override -> 'sliders'
+        ),
+    })
+    out = render(inv)
+
+    assert "<$sliders>" in out
+    assert "<$wifi>" not in out
+
+
+def test_plantuml_invalid_device_type_falls_back_to_question(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01",
+            vendor="Synology",
+            device_type="refrigerator",  # not in catalogue
+        ),
+    })
+    out = render(inv)
+
+    assert "<$question>" in out
+    assert "<$hard_drive>" not in out
+
+
+def test_graphviz_emits_image_attribute(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+            custom_name="NAS",
+        ),
+    })
+    out = render(inv)
+
+    assert 'image="icons/nas.svg"' in out
+    assert 'labelloc="b"' in out
+    assert "imagescale=true" in out
+
+
+def test_graphviz_explicit_device_type_overrides_inference(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01",
+            vendor="TP-Link Systems",  # would infer 'ap'
+            device_type="controller",
+        ),
+    })
+    out = render(inv)
+
+    assert 'image="icons/controller.svg"' in out
+    assert 'image="icons/ap.svg"' not in out
+
+
+def test_graphviz_unknown_vendor_uses_other_icon(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor=None,
+        ),
+    })
+    out = render(inv)
+
+    assert 'image="icons/other.svg"' in out
+
+
+def test_graphviz_offline_host_keeps_image_and_uses_dashed_style(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+            online=False,
+        ),
+    })
+    out = render(inv)
+
+    assert 'image="icons/nas.svg"' in out
+    assert "style=dashed" in out
+
+
+def test_graphviz_copy_assets_to_writes_icons(tmp_path, make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom",
+        ),
+    })
+    out = render(inv, copy_assets_to=tmp_path)
+
+    assert (tmp_path / "icons" / "nas.svg").is_file()
+    assert (tmp_path / "icons" / "router.svg").is_file()
+    # No copy when copy_assets_to is None: covered by other tests that
+    # didn't pass the arg.

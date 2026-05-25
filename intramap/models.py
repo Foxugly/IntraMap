@@ -87,6 +87,8 @@ class Host:
     custom_name: str | None = None
     location: Location = field(default_factory=Location)
     uplink: Uplink | None = None
+    device_type: str | None = None
+    manual: bool = False
     online: bool = True
 
     def __post_init__(self) -> None:
@@ -100,6 +102,8 @@ class Host:
             "custom_name": self.custom_name,
             "location": asdict(self.location),
             "uplink": asdict(self.uplink) if self.uplink is not None else None,
+            "device_type": self.device_type,
+            "manual": self.manual,
             "first_seen": self.first_seen.isoformat(),
             "last_seen": self.last_seen.isoformat(),
             "online": self.online,
@@ -124,6 +128,21 @@ class Host:
                 f"    patch_port: 7\n"
                 f"    poe: true"
             )
+
+        device_type = data.get("device_type")
+        if device_type is not None and not isinstance(device_type, str):
+            raise ValueError(
+                f"Host {mac}: 'device_type' must be a string or null, got "
+                f"{type(device_type).__name__} ({device_type!r})"
+            )
+
+        manual = data.get("manual", False)
+        if not isinstance(manual, bool):
+            raise ValueError(
+                f"Host {mac}: 'manual' must be a boolean (true/false), got "
+                f"{type(manual).__name__} ({manual!r})"
+            )
+
         return cls(
             mac=mac,
             ip=data.get("ip"),
@@ -132,10 +151,67 @@ class Host:
             custom_name=data.get("custom_name"),
             location=Location(**loc_data),
             uplink=uplink,
+            device_type=device_type,
+            manual=manual,
             first_seen=_parse_dt(data["first_seen"]),
             last_seen=_parse_dt(data["last_seen"]),
             online=data.get("online", True),
         )
+
+
+DEVICE_TYPES: frozenset[str] = frozenset({
+    "router", "switch", "ap", "controller", "nas",
+    "tv", "stb", "phone", "tablet", "laptop",
+    "iot", "camera", "printer", "voip", "other",
+})
+
+
+# Order matters: first matching pattern wins. Patterns are substring,
+# case-insensitive.
+_VENDOR_PATTERNS: list[tuple[tuple[str, ...], str]] = [
+    (("sagemcom", "vantiva", "technicolor", "arris"), "router"),
+    (("synology", "qnap", "western digital", "seagate"), "nas"),
+    (("cisco", "juniper", "aruba", "mikrotik", "netgear"), "switch"),
+    (("tp-link", "ubiquiti", "unifi"), "ap"),
+    (("lg electronics", "samsung electronics", "sony", "philips"), "tv"),
+    (("apple", "google", "xiaomi", "huawei", "oneplus"), "phone"),
+    (("hikvision", "dahua", "axis", "bticino"), "camera"),
+    (("intel corporate", "dell", "lenovo", "asus", "hp inc",
+      "universal global scientific"), "laptop"),
+    (("tuya", "tado", "nest", "ring", "philips hue",
+      "eedomus", "davicom"), "iot"),
+    (("grandstream", "yealink", "polycom", "snom"), "voip"),
+    (("canon", "epson", "brother industries"), "printer"),
+]
+
+
+def infer_device_type(vendor: str | None) -> str | None:
+    """Map a raw vendor string to a device_type using substring patterns.
+
+    Returns None if no pattern matches or vendor is None.
+    """
+    if not vendor:
+        return None
+    v = vendor.lower()
+    for patterns, device_type in _VENDOR_PATTERNS:
+        for p in patterns:
+            if p in v:
+                return device_type
+    return None
+
+
+def _resolve_device_type(host) -> str:
+    """Return the device_type to use when rendering this host.
+
+    Priority: explicit host.device_type (if in catalogue) > inferred from
+    vendor > 'other'. An explicit value not in the catalogue silently
+    falls back to 'other'.
+    """
+    explicit = getattr(host, "device_type", None)
+    if explicit is not None:
+        return explicit if explicit in DEVICE_TYPES else "other"
+    inferred = infer_device_type(getattr(host, "vendor", None))
+    return inferred or "other"
 
 
 @dataclass

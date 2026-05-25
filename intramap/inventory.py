@@ -57,16 +57,19 @@ def merge(inv: Inventory, discovered: Iterable[DiscoveredHost],
     """Merge a list of newly discovered hosts into the inventory in place.
 
     - New MAC: added with empty custom_name/location/uplink,
-      first_seen=last_seen=now
-    - Existing MAC: ip/hostname/vendor/last_seen updated, online=True;
-      custom_name/location/uplink/first_seen preserved
-    - Existing MAC absent from discovered: online=False, all other fields preserved
+      first_seen=last_seen=now, manual=False
+    - Existing MAC, manual=False: ip/hostname/vendor/last_seen updated,
+      online=True; custom_name/location/uplink/first_seen preserved
+    - Existing MAC, manual=True: ignored entirely (no update, no offline marking)
+    - Existing MAC absent from discovered, manual=False: online=False, other fields preserved
     """
     discovered_by_mac = {d.mac: d for d in discovered}
 
     for mac, d in discovered_by_mac.items():
         if mac in inv.hosts:
             h = inv.hosts[mac]
+            if h.manual:
+                continue  # manual entries are user-managed; do not overwrite
             h.ip = d.ip
             h.hostname = d.hostname
             h.vendor = d.vendor
@@ -87,6 +90,8 @@ def merge(inv: Inventory, discovered: Iterable[DiscoveredHost],
             )
 
     for mac, h in inv.hosts.items():
+        if h.manual:
+            continue  # manual entries keep their declared online state
         if mac not in discovered_by_mac:
             h.online = False
 

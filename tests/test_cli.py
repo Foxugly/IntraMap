@@ -300,3 +300,158 @@ def test_scan_warns_on_zero_hosts(tmp_path: Path, capsys):
     assert exit_code == 0  # not an error, just a warning
     err = captured.err
     assert "zero hosts" in err.lower() or "sudo" in err.lower() or "administrator" in err.lower()
+
+
+def test_list_prints_type_column(tmp_path, capsys):
+    from datetime import datetime
+    from intramap.cli import main
+    from intramap.inventory import save
+    from intramap.models import Host, Inventory
+
+    now = datetime(2026, 5, 25, 0, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+            hostname=None, vendor="Synology Incorporated",
+            first_seen=now, last_seen=now,
+        ),
+    })
+    inv_path = tmp_path / "inv.yaml"
+    save(inv, inv_path)
+
+    rc = main(["--inventory", str(inv_path), "list"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "Type" in out
+    assert "nas" in out
+
+
+def test_list_type_for_unknown_vendor_is_other(tmp_path, capsys):
+    from datetime import datetime
+    from intramap.cli import main
+    from intramap.inventory import save
+    from intramap.models import Host, Inventory
+
+    now = datetime(2026, 5, 25, 0, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+            hostname=None, vendor="Totally Unknown",
+            first_seen=now, last_seen=now,
+        ),
+    })
+    inv_path = tmp_path / "inv.yaml"
+    save(inv, inv_path)
+
+    rc = main(["--inventory", str(inv_path), "list"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "other" in out
+
+
+def test_list_explicit_device_type_shown_over_inferred(tmp_path, capsys):
+    from datetime import datetime
+    from intramap.cli import main
+    from intramap.inventory import save
+    from intramap.models import Host, Inventory
+
+    now = datetime(2026, 5, 25, 0, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+            hostname=None, vendor="TP-Link Systems",
+            device_type="controller",
+            first_seen=now, last_seen=now,
+        ),
+    })
+    inv_path = tmp_path / "inv.yaml"
+    save(inv, inv_path)
+
+    rc = main(["--inventory", str(inv_path), "list"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "controller" in out
+
+
+def test_list_filter_by_type_exact_match(tmp_path, capsys):
+    from datetime import datetime
+    from intramap.cli import main
+    from intramap.inventory import save
+    from intramap.models import Host, Inventory
+
+    now = datetime(2026, 5, 25, 0, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+            hostname=None, vendor="Synology",
+            first_seen=now, last_seen=now,
+        ),
+        "aa:bb:cc:dd:ee:02": Host(
+            mac="aa:bb:cc:dd:ee:02", ip="192.168.1.2",
+            hostname=None, vendor="Sagemcom",
+            first_seen=now, last_seen=now,
+        ),
+    })
+    inv_path = tmp_path / "inv.yaml"
+    save(inv, inv_path)
+
+    rc = main(["--inventory", str(inv_path), "list", "--type", "nas"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "aa:bb:cc:dd:ee:01" in out
+    assert "aa:bb:cc:dd:ee:02" not in out
+
+
+def test_list_filter_by_type_case_insensitive(tmp_path, capsys):
+    from datetime import datetime
+    from intramap.cli import main
+    from intramap.inventory import save
+    from intramap.models import Host, Inventory
+
+    now = datetime(2026, 5, 25, 0, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+            hostname=None, vendor="Synology",
+            first_seen=now, last_seen=now,
+        ),
+    })
+    inv_path = tmp_path / "inv.yaml"
+    save(inv, inv_path)
+
+    rc = main(["--inventory", str(inv_path), "list", "--type", "NAS"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "aa:bb:cc:dd:ee:01" in out
+
+
+def test_render_graphviz_writes_icons_subdir(tmp_path):
+    from datetime import datetime
+    from intramap.cli import main
+    from intramap.inventory import save
+    from intramap.models import Host, Inventory
+
+    now = datetime(2026, 5, 25, 0, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+            hostname=None, vendor="Synology",
+            first_seen=now, last_seen=now,
+        ),
+    })
+    inv_path = tmp_path / "inv.yaml"
+    save(inv, inv_path)
+    out_dir = tmp_path / "out"
+
+    rc = main([
+        "--inventory", str(inv_path),
+        "render", "--format", "graphviz", "--output-dir", str(out_dir),
+    ])
+
+    assert rc == 0
+    assert (out_dir / "network.dot").is_file()
+    assert (out_dir / "icons" / "nas.svg").is_file()

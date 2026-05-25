@@ -9,6 +9,7 @@ import psutil
 
 from intramap import inventory as inventory_mod
 from intramap import scanner
+from intramap.models import _resolve_device_type
 from intramap.renderers import plantuml as plantuml_renderer
 from intramap.renderers import graphviz as graphviz_renderer
 
@@ -42,6 +43,9 @@ def _cmd_list(args: argparse.Namespace) -> int:
             h.vendor is None or args.vendor.lower() not in h.vendor.lower()
         ):
             continue
+        if args.type_filter is not None:
+            if _resolve_device_type(h).lower() != args.type_filter.lower():
+                continue
         loc = h.location
         loc_str = "/".join(
             x for x in (loc.floor, loc.room, loc.rack) if x
@@ -50,13 +54,14 @@ def _cmd_list(args: argparse.Namespace) -> int:
             mac,
             h.ip or "-",
             h.custom_name or "-",
+            _resolve_device_type(h),
             h.vendor or "-",
             h.hostname or "-",
             loc_str,
             "online" if h.online else "OFFLINE",
         ))
 
-    headers = ("MAC", "IP", "Name", "Vendor", "Hostname", "Location", "Status")
+    headers = ("MAC", "IP", "Name", "Type", "Vendor", "Hostname", "Location", "Status")
     widths = [max(len(str(r[i])) for r in (rows + [headers])) for i in range(len(headers))]
     fmt = "  ".join(f"{{:<{w}}}" for w in widths)
     print(fmt.format(*headers))
@@ -84,8 +89,12 @@ def _cmd_render(args: argparse.Namespace) -> int:
         chosen = [args.format]
 
     for name in chosen:
-        path, fn = targets[name]
-        path.write_text(fn(inv), encoding="utf-8")
+        path, _ = targets[name]
+        if name == "graphviz":
+            text = graphviz_renderer.render(inv, copy_assets_to=out_dir)
+        else:
+            text = plantuml_renderer.render(inv)
+        path.write_text(text, encoding="utf-8")
         print(f"Wrote {path}")
     return 0
 
@@ -187,6 +196,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Only show hosts whose vendor contains the given "
                              "substring (case-insensitive). Hosts without a "
                              "vendor are excluded.")
+    p_list.add_argument("--type", default=None, dest="type_filter",
+                        help="filter by exact device_type (case-insensitive); "
+                             "compares against resolved device_type")
     p_list.set_defaults(func=_cmd_list)
 
     p_render = subs.add_parser("render", help="Render diagrams from inventory")

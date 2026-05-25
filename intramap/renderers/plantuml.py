@@ -1,6 +1,7 @@
 from collections import defaultdict
 
-from intramap.models import Host, Inventory, Uplink
+from intramap.models import Host, Inventory, Uplink, _resolve_device_type
+from intramap.renderers.icons import PLANTUML_SPRITES
 
 
 _UNLOCALISED = "Non localisé"
@@ -53,15 +54,27 @@ def render(inv: Inventory) -> str:
         floor, room, rack = _bucket(host)
         tree[floor][room][rack].append(host)
 
-    lines: list[str] = ["@startuml", 'skinparam node<<offline>> {',
-                        '  BackgroundColor #DDDDDD', '  BorderColor #888888',
-                        '}', ""]
+    used_types = {_resolve_device_type(h) for h in inv.hosts.values()}
+    used_sprites = sorted({PLANTUML_SPRITES[t] for t in used_types})
+    include_lines = [f"!include <font-awesome-6/{s}>" for s in used_sprites]
+
+    lines: list[str] = [
+        "@startuml",
+        "skinparam node<<offline>> {",
+        "  BackgroundColor #DDDDDD",
+        "  BorderColor #888888",
+        "}",
+        *include_lines,
+        "",
+    ]
 
     def render_host(host: Host, indent: str) -> None:
         stereotype = " <<offline>>" if not host.online else ""
         node_id = node_ids[host.mac]
+        sprite = PLANTUML_SPRITES[_resolve_device_type(host)]
+        label = f"<${sprite}>\\n{_label(host)}"
         lines.append(
-            f'{indent}node "{_label(host)}" as {node_id}{stereotype}'
+            f'{indent}node "{label}" as {node_id}{stereotype}'
         )
 
     for floor in sorted(tree.keys()):
