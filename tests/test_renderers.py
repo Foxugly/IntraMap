@@ -758,3 +758,95 @@ def test_graphviz_offline_host_keeps_color_but_dashed(make_host_factory):
     assert 'fillcolor="#9467bd"' in out
     # offline combines filled and dashed
     assert 'style="filled,dashed"' in out
+
+
+def test_plantuml_draws_wifi_edge_when_valid(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="TP-Link Systems",
+            custom_name="AP RDC",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+            custom_name="iPhone",
+            wifi_ap_mac="aa:bb:cc:dd:ee:01",
+        ),
+    })
+    out = render(inv)
+    assert "..>" in out  # PlantUML dashed arrow
+    assert "Wi-Fi" in out
+
+
+def test_plantuml_wifi_edge_to_unknown_mac_skipped(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+            wifi_ap_mac="ff:ff:ff:ff:ff:ff",
+        ),
+    })
+    out = render(inv)
+    assert "Wi-Fi" not in out
+    assert "..>" not in out
+
+
+def test_graphviz_draws_wifi_edge_when_valid(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="TP-Link",
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+            wifi_ap_mac="aa:bb:cc:dd:ee:01",
+        ),
+    })
+    out = render(inv)
+    assert "style=dashed" in out
+    assert "Wi-Fi" in out
+
+
+def test_graphviz_wifi_edge_to_unknown_mac_skipped(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+            wifi_ap_mac="ff:ff:ff:ff:ff:ff",
+        ),
+    })
+    out = render(inv)
+    assert "Wi-Fi" not in out
+
+
+def test_host_with_both_uplink_and_wifi_gets_two_edges(make_host_factory):
+    """A laptop docked via Ethernet + associated to Wi-Fi backup should
+    show BOTH edges in the diagram."""
+    from intramap.models import Inventory, Uplink
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="TP-Link",  # AP
+        ),
+        "aa:bb:cc:dd:ee:02": make_host_factory(
+            mac="aa:bb:cc:dd:ee:02", vendor="Cisco",  # switch
+            device_type="switch",
+        ),
+        "aa:bb:cc:dd:ee:03": make_host_factory(
+            mac="aa:bb:cc:dd:ee:03", vendor="Intel Corporate",  # laptop
+            uplink=Uplink(switch_mac="aa:bb:cc:dd:ee:02", switch_port=5),
+            wifi_ap_mac="aa:bb:cc:dd:ee:01",
+        ),
+    })
+    out = render(inv)
+    assert "Wi-Fi" in out
+    assert "sw:5" in out

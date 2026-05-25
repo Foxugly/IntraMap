@@ -122,5 +122,16 @@ def render(inv: Inventory) -> str:
         label_part = f' : "{_escape(label)}"' if label else ""
         lines.append(f"{src} {style} {dst}{label_part}")
 
+    # Edges from Wi-Fi associations
+    for mac in sorted(inv.hosts.keys()):
+        host = inv.hosts[mac]
+        if host.wifi_ap_mac is None:
+            continue
+        if host.wifi_ap_mac not in node_ids:
+            continue
+        src = node_ids[host.mac]
+        dst = node_ids[host.wifi_ap_mac]
+        lines.append(f'{src} ..> {dst} : "Wi-Fi"')
+
     lines.append("@enduml")
     return "\n".join(lines) + "\n"

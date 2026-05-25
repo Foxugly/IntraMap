@@ -135,6 +135,20 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
         attrs_str = f' [{", ".join(attrs)}]' if attrs else ""
         lines.append(f"  {node_ids[host.mac]} -- {node_ids[u.switch_mac]}{attrs_str};")
 
+    # Edges from Wi-Fi associations
+    for mac in sorted(inv.hosts.keys()):
+        host = inv.hosts[mac]
+        if host.wifi_ap_mac is None:
+            continue
+        if host.wifi_ap_mac not in node_ids:
+            continue
+        src = node_ids[host.mac]
+        dst = node_ids[host.wifi_ap_mac]
+        lines.append(
+            f'  {src} -- {dst} [style=dashed, color="#1f77b4", '
+            f'label="Wi-Fi", fontsize=10];'
+        )
+
     lines.append("}")
 
     if copy_assets_to is not None:
