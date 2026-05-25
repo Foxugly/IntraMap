@@ -99,3 +99,10 @@ Hosts are identified by MAC address (stable across IP/hostname changes).
 ```bash
 pytest
 ```
+
+## Acknowledgements
+
+Icons by [Font Awesome](https://fontawesome.com/), licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+The bundled SVGs are unmodified copies of selected Font Awesome Free 6
+solid icons (see `intramap/renderers/icons/LICENSE`).
