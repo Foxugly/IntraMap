@@ -14,8 +14,10 @@ def _escape(text: str) -> str:
 
 def _label(host: Host) -> str:
     name = host.custom_name or host.mac
-    ip = host.ip or "?"
-    lines = [name, ip, host.mac]
+    lines = [name]
+    if host.ip:
+        lines.append(host.ip)
+    lines.append(host.mac)
     return _escape("\\n".join(lines))
 
 

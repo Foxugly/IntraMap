@@ -850,3 +850,19 @@ def test_host_with_both_uplink_and_wifi_gets_two_edges(make_host_factory):
     out = render(inv)
     assert "Wi-Fi" in out
     assert "sw:5" in out
+
+
+def test_plantuml_label_omits_ip_when_null(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", ip=None,
+            custom_name="Switch principal", vendor=None,
+        ),
+    })
+    out = render(inv)
+    assert "aa:bb:cc:dd:ee:01" in out
+    assert "Switch principal\\nNone" not in out
+    assert "Switch principal\\n?" not in out
