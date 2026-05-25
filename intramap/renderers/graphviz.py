@@ -56,7 +56,14 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
         floor, room, rack = _bucket(host)
         tree[floor][room][rack].append(host)
 
-    lines: list[str] = ["graph network {", "  node [shape=box];"]
+    lines: list[str] = [
+        "graph network {",
+        "  rankdir=TB;",
+        "  splines=ortho;",
+        "  nodesep=0.5;",
+        "  ranksep=0.8;",
+        "  node [shape=box];",
+    ]
     cluster_id = 0
 
     def render_host(host: Host, indent: str) -> None:

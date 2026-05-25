@@ -60,6 +60,7 @@ def render(inv: Inventory) -> str:
 
     lines: list[str] = [
         "@startuml",
+        "top to bottom direction",
         "skinparam node<<offline>> {",
         "  BackgroundColor #DDDDDD",
         "  BorderColor #888888",

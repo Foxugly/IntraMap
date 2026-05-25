@@ -653,3 +653,22 @@ def test_graphviz_copy_assets_to_writes_icons(tmp_path, make_host_factory):
     assert (tmp_path / "icons" / "router.svg").is_file()
     # No copy when copy_assets_to is None: covered by other tests that
     # didn't pass the arg.
+
+
+def test_plantuml_has_top_to_bottom_direction():
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory()
+    out = render(inv)
+    assert "top to bottom direction" in out
+
+
+def test_graphviz_has_top_bottom_rankdir():
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory()
+    out = render(inv)
+    assert "rankdir=TB" in out
+    assert "splines=ortho" in out
