@@ -2,7 +2,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from intramap.models import Host, Inventory, Uplink, _resolve_device_type
-from intramap.renderers.icons import copy_icons_to
+from intramap.renderers.icons import copy_icons_to, DEVICE_COLORS
 
 
 _UNLOCALISED = "Non localisé"
@@ -68,14 +68,18 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
 
     def render_host(host: Host, indent: str) -> None:
         device_type = _resolve_device_type(host)
+        fillcolor = DEVICE_COLORS[device_type]
         attrs = [
             f'label="{_label(host)}"',
             f'image="icons/{device_type}.svg"',
             'labelloc="b"',
             'imagescale=true',
+            f'fillcolor="{fillcolor}"',
         ]
-        if not host.online:
-            attrs.append("style=dashed")
+        if host.online:
+            attrs.append("style=filled")
+        else:
+            attrs.append('style="filled,dashed"')
             attrs.append('color="#888888"')
         node_id = node_ids[host.mac]
         lines.append(f'{indent}{node_id} [{", ".join(attrs)}];')

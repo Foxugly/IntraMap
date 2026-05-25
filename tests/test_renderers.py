@@ -270,7 +270,7 @@ def test_graphviz_offline_host_dashed():
         ),
     }, last_scan=datetime(2026, 5, 24))
     out = render_graphviz(inv)
-    assert "style=dashed" in out
+    assert "dashed" in out
 
 
 def test_graphviz_escapes_double_quotes():
@@ -632,7 +632,7 @@ def test_graphviz_offline_host_keeps_image_and_uses_dashed_style(make_host_facto
     out = render(inv)
 
     assert 'image="icons/nas.svg"' in out
-    assert "style=dashed" in out
+    assert "dashed" in out
 
 
 def test_graphviz_copy_assets_to_writes_icons(tmp_path, make_host_factory):
@@ -731,3 +731,30 @@ def test_plantuml_offline_host_has_no_color_suffix(make_host_factory):
     assert "<<offline>>" in out
     nas_color_lines = [l for l in out.splitlines() if "#9467bd" in l]
     assert nas_color_lines == []
+
+
+def test_graphviz_online_host_has_fillcolor(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    assert 'fillcolor="#9467bd"' in out
+    assert "style=filled" in out
+
+
+def test_graphviz_offline_host_keeps_color_but_dashed(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            vendor="Synology", online=False,
+        ),
+    })
+    out = render(inv)
+    assert 'fillcolor="#9467bd"' in out
+    # offline combines filled and dashed
+    assert 'style="filled,dashed"' in out
