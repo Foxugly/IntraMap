@@ -732,7 +732,11 @@ def test_plantuml_offline_host_has_no_color_suffix(make_host_factory):
     })
     out = render(inv)
     assert "<<offline>>" in out
-    nas_color_lines = [l for l in out.splitlines() if "#9467bd" in l]
+    # Color must not appear on host nodes; legend nodes (legend_*) are exempt.
+    nas_color_lines = [
+        l for l in out.splitlines()
+        if "#9467bd" in l and "legend_" not in l
+    ]
     assert nas_color_lines == []
 
 
@@ -922,3 +926,31 @@ def test_graphviz_has_tooltip(make_host_factory):
     assert "tooltip=" in out
     assert "Synology" in out
     assert "2026-05-24" in out
+
+
+def test_plantuml_emits_legend_cluster(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    assert 'package "Légende"' in out
+    # the used device_type appears in the legend
+    assert "legend_nas" in out or "nas" in out.split('package "Légende"', 1)[1]
+
+
+def test_plantuml_legend_only_lists_used_types(make_host_factory):
+    """Legend only mentions device_types actually present in the inventory."""
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),  # nas only
+    })
+    out = render(inv)
+    legend = out.split('package "Légende"', 1)[1]
+    # 'nas' is in the legend, but 'router' is not (no router in inventory)
+    assert "nas" in legend
+    assert "router" not in legend

@@ -135,5 +135,16 @@ def render(inv: Inventory) -> str:
         dst = node_ids[host.wifi_ap_mac]
         lines.append(f'{src} ..> {dst} : "Wi-Fi"')
 
+    used_types = sorted({_resolve_device_type(h) for h in inv.hosts.values()})
+    if used_types:
+        lines.append('package "Légende" {')
+        for t in used_types:
+            sprite = PLANTUML_SPRITES[t]
+            color = DEVICE_COLORS[t]
+            lines.append(
+                f'  node "<${sprite}>\\n{t}" as legend_{t} {color}'
+            )
+        lines.append("}")
+
     lines.append("@enduml")
     return "\n".join(lines) + "\n"
