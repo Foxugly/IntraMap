@@ -179,6 +179,9 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
                 f'    legend_{t} [label="{t}", image="icons/{t}.svg", '
                 f'labelloc=b, imagescale=true, fillcolor="{color}", style=filled];'
             )
+        lines.append('    legend_wired [label="─── wired", shape=plaintext];')
+        lines.append('    legend_poe [label="━━━ PoE", shape=plaintext, fontcolor="#ff7f0e"];')
+        lines.append('    legend_wifi [label="┄┄┄ Wi-Fi", shape=plaintext, fontcolor="#1f77b4"];')
         lines.append("  }")
 
     lines.append("}")

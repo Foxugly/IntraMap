@@ -144,6 +144,7 @@ def render(inv: Inventory) -> str:
             lines.append(
                 f'  node "<${sprite}>\\n{t}" as legend_{t} {color}'
             )
+        lines.append('  note "**Edges:**\\n─── wired\\n━━━ PoE (orange)\\n┄┄┄ Wi-Fi (blue)" as legend_edges')
         lines.append("}")
 
     lines.append("@enduml")

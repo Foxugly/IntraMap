@@ -798,8 +798,9 @@ def test_plantuml_wifi_edge_to_unknown_mac_skipped(make_host_factory):
         ),
     })
     out = render(inv)
-    assert "Wi-Fi" not in out
+    # No Wi-Fi edge arrow should be emitted (legend may still mention "Wi-Fi")
     assert "..>" not in out
+    assert ' : "Wi-Fi"' not in out
 
 
 def test_graphviz_draws_wifi_edge_when_valid(make_host_factory):
@@ -831,7 +832,9 @@ def test_graphviz_wifi_edge_to_unknown_mac_skipped(make_host_factory):
         ),
     })
     out = render(inv)
-    assert "Wi-Fi" not in out
+    # No Wi-Fi edge should be drawn. Wi-Fi edges have a unique combination of
+    # style=dashed with color="#1f77b4" (the legend node uses fontcolor, not color).
+    assert 'style=dashed, color="#1f77b4"' not in out
 
 
 def test_host_with_both_uplink_and_wifi_gets_two_edges(make_host_factory):
@@ -981,3 +984,32 @@ def test_graphviz_legend_only_lists_used_types(make_host_factory):
     legend = out.split('subgraph cluster_legend', 1)[1]
     assert "legend_nas" in legend
     assert "legend_router" not in legend
+
+
+def test_plantuml_legend_includes_edge_styles(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.plantuml import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    legend = out.split('package "Légende"', 1)[1]
+    # Edge style legend mentions all 3 edge types
+    assert "wired" in legend
+    assert "PoE" in legend
+    assert "Wi-Fi" in legend
+
+
+def test_graphviz_legend_includes_edge_styles(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
+    })
+    out = render(inv)
+    legend = out.split("subgraph cluster_legend", 1)[1]
+    assert "legend_wired" in legend
+    assert "legend_poe" in legend
+    assert "legend_wifi" in legend
