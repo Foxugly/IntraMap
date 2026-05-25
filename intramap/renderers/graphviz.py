@@ -13,10 +13,28 @@ def _escape(text: str) -> str:
     return text.replace('"', '\\"')
 
 
-def _label(host: Host) -> str:
-    name = host.custom_name or host.mac
-    ip = host.ip or "?"
-    return _escape(f"{name}\\n{ip}\\n{host.mac}")
+def _escape_html(text: str) -> str:
+    return (text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;"))
+
+
+def _html_label(host: Host) -> str:
+    """Build a Graphviz HTML label with differentiated text sizes."""
+    name = _escape_html(host.custom_name or host.mac)
+    parts = [f"<B>{name}</B>"]
+    if host.ip:
+        parts.append(f'<FONT POINT-SIZE="10">{_escape_html(host.ip)}</FONT>')
+    parts.append(
+        f'<FONT POINT-SIZE="9" COLOR="#666666">{_escape_html(host.mac)}</FONT>'
+    )
+    return "<" + "<BR/>".join(parts) + ">"
+
+
+def _tooltip(host: Host) -> str:
+    vendor = host.vendor or "unknown"
+    last = host.last_seen.date().isoformat()
+    return f"{vendor} | last seen {last}"
 
 
 def _bucket(host: Host) -> tuple[str, str, str | None]:
@@ -70,7 +88,8 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
         device_type = _resolve_device_type(host)
         fillcolor = DEVICE_COLORS[device_type]
         attrs = [
-            f'label="{_label(host)}"',
+            f'label={_html_label(host)}',
+            f'tooltip="{_tooltip(host)}"',
             f'image="icons/{device_type}.svg"',
             'labelloc="b"',
             'imagescale=true',

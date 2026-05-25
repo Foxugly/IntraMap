@@ -282,7 +282,10 @@ def test_graphviz_escapes_double_quotes():
         ),
     }, last_scan=datetime(2026, 5, 24))
     out = render_graphviz(inv)
-    assert 'PC \\"test\\"' in out
+    # HTML labels don't need backslash-escaped quotes; the name appears verbatim
+    assert 'PC "test"' in out
+    # The node label is HTML format (angle brackets), not text format (quotes)
+    assert "label=<" in out
 
 
 def test_graphviz_draws_edge_for_valid_uplink():
@@ -866,3 +869,56 @@ def test_plantuml_label_omits_ip_when_null(make_host_factory):
     assert "aa:bb:cc:dd:ee:01" in out
     assert "Switch principal\\nNone" not in out
     assert "Switch principal\\n?" not in out
+
+
+def test_graphviz_uses_html_labels(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", custom_name="NAS",
+            vendor="Synology",
+        ),
+    })
+    out = render(inv)
+    # HTML labels start with < not " (Graphviz convention)
+    assert "label=<" in out
+    # Bold tag for the name
+    assert "<B>NAS</B>" in out
+    # Smaller font for IP / MAC
+    assert "<BR/>" in out
+
+
+def test_graphviz_html_label_omits_ip_when_null(make_host_factory):
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", ip=None,
+            custom_name="Switch", vendor=None,
+        ),
+    })
+    out = render(inv)
+    assert "aa:bb:cc:dd:ee:01" in out
+    # No literal "None" leaking into the label
+    assert ">None<" not in out
+
+
+def test_graphviz_has_tooltip(make_host_factory):
+    from datetime import datetime
+    from intramap.models import Inventory
+    from intramap.renderers.graphviz import render
+
+    last = datetime(2026, 5, 24, 10, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host_factory(
+            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
+            last_seen=last,
+        ),
+    })
+    out = render(inv)
+    assert "tooltip=" in out
+    assert "Synology" in out
+    assert "2026-05-24" in out
