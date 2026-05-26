@@ -92,7 +92,7 @@ class MainWindow(QMainWindow):
         self._build_actions()
         self._build_menus()
         self._build_toolbar()
-        self.statusBar().showMessage("Prêt")
+        self.statusBar().showMessage(tr("Prêt"))
 
         # --- chargement initial -----------------------------------------
         if self.inventory_path.exists():
@@ -300,7 +300,7 @@ class MainWindow(QMainWindow):
         tb.addAction(self.act_toggle_inspector)
         tb.addSeparator()
         self._search = QLineEdit()
-        self._search.setPlaceholderText("Rechercher (nom, IP, type, étage…)")
+        self._search.setPlaceholderText(tr("Rechercher (nom, IP, type, étage…)"))
         self._search.setClearButtonEnabled(True)
         self._search.setFixedWidth(240)
         self._search.textChanged.connect(self._on_search)
@@ -334,8 +334,9 @@ class MainWindow(QMainWindow):
             inv = inventory_mod.load(path)
         except Exception as e:
             QMessageBox.critical(
-                self, "Inventaire illisible",
-                f"Impossible de charger {path} :\n{e}")
+                self, tr("Inventaire illisible"),
+                tr("Impossible de charger {path} :\n{err}").format(
+                    path=path, err=e))
             return
         self.inv = inv
         self.inventory_path = path
@@ -361,7 +362,8 @@ class MainWindow(QMainWindow):
         self._reset_history()
         self._note_recent(path)
         self.statusBar().showMessage(
-            f"{len(inv.hosts)} device(s) chargé(s) depuis {path.name}")
+            tr("{n} device(s) chargé(s) depuis {name}").format(
+                n=len(inv.hosts), name=path.name))
 
     def _reload_canvas(self) -> None:
         """Reconstruit le canvas en conservant positions, coudes et style."""
@@ -375,8 +377,8 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             return
         path, _ = QFileDialog.getOpenFileName(
-            self, "Ouvrir un inventaire", str(self.inventory_path.parent),
-            "Inventaire YAML (*.yaml *.yml);;Tous les fichiers (*)")
+            self, tr("Ouvrir un inventaire"), str(self.inventory_path.parent),
+            tr("Inventaire YAML (*.yaml *.yml);;Tous les fichiers (*)"))
         if path:
             self._load_inventory(Path(path))
 
@@ -396,13 +398,13 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             return
         self._reset_to_empty()
-        self.statusBar().showMessage("Nouvel inventaire")
+        self.statusBar().showMessage(tr("Nouvel inventaire"))
 
     def _close_inventory(self) -> None:
         if not self._confirm_discard():
             return
         self._reset_to_empty()
-        self.statusBar().showMessage("Inventaire fermé")
+        self.statusBar().showMessage(tr("Inventaire fermé"))
 
     # -- récemment ouverts -------------------------------------------------
     @staticmethod
@@ -427,7 +429,7 @@ class MainWindow(QMainWindow):
         self.menu_recent.clear()
         existing = [p for p in self._recents if Path(p).exists()]
         if not existing:
-            act = self.menu_recent.addAction("(aucun)")
+            act = self.menu_recent.addAction(tr("(aucun)"))
             act.setEnabled(False)
             return
         for p in existing:
@@ -436,7 +438,7 @@ class MainWindow(QMainWindow):
             act.triggered.connect(
                 lambda _checked=False, path=p: self._open_recent(path))
         self.menu_recent.addSeparator()
-        clear = self.menu_recent.addAction("Vider la liste")
+        clear = self.menu_recent.addAction(tr("Vider la liste"))
         clear.triggered.connect(self._clear_recents)
 
     def _open_recent(self, path: str) -> None:
@@ -498,7 +500,7 @@ class MainWindow(QMainWindow):
         self._hist_pos -= 1
         self._restore_state(self._history[self._hist_pos])
         self._update_undo_actions()
-        self.statusBar().showMessage("Annulé")
+        self.statusBar().showMessage(tr("Annulé"))
 
     def _redo(self) -> None:
         if self._hist_pos >= len(self._history) - 1:
@@ -506,7 +508,7 @@ class MainWindow(QMainWindow):
         self._hist_pos += 1
         self._restore_state(self._history[self._hist_pos])
         self._update_undo_actions()
-        self.statusBar().showMessage("Rétabli")
+        self.statusBar().showMessage(tr("Rétabli"))
 
     def _update_undo_actions(self) -> None:
         self.act_undo.setEnabled(self._hist_pos > 0)
@@ -523,18 +525,19 @@ class MainWindow(QMainWindow):
                                layout=layout_mod.layout_to_dict(layout))
         except Exception as e:
             QMessageBox.critical(
-                self, "Échec de l'enregistrement",
-                f"Impossible d'écrire {self.inventory_path} :\n{e}")
+                self, tr("Échec de l'enregistrement"),
+                tr("Impossible d'écrire {path} :\n{err}").format(
+                    path=self.inventory_path, err=e))
             return False
         self._set_dirty(False)
         self.statusBar().showMessage(
-            f"Enregistré : {self.inventory_path.name}")
+            tr("Enregistré : {name}").format(name=self.inventory_path.name))
         return True
 
     def _save_as(self) -> bool:
         path, _ = QFileDialog.getSaveFileName(
-            self, "Enregistrer l'inventaire sous",
-            str(self.inventory_path), "Inventaire YAML (*.yaml)")
+            self, tr("Enregistrer l'inventaire sous"),
+            str(self.inventory_path), tr("Inventaire YAML (*.yaml)"))
         if not path:
             return False
         self.inventory_path = Path(path)
@@ -548,8 +551,9 @@ class MainWindow(QMainWindow):
     def _export_pdf(self) -> None:
         if not self.canvas.nodes:
             QMessageBox.information(
-                self, "Rien à exporter",
-                "La carte est vide. Scannez le réseau ou ajoutez un device.")
+                self, tr("Rien à exporter"),
+                tr("La carte est vide. Scannez le réseau ou ajoutez un "
+                   "device."))
             return
 
         scene = self.canvas.scene()
@@ -562,8 +566,8 @@ class MainWindow(QMainWindow):
 
         default = str(self.inventory_path.with_suffix(".pdf"))
         path, _ = QFileDialog.getSaveFileName(
-            self, "Exporter la carte en PDF", default,
-            "Document PDF (*.pdf)")
+            self, tr("Exporter la carte en PDF"), default,
+            tr("Document PDF (*.pdf)"))
         if not path:
             return
 
@@ -577,8 +581,8 @@ class MainWindow(QMainWindow):
                 include_wiring=include_wiring)
         except Exception as e:
             QMessageBox.critical(
-                self, "Échec de l'export",
-                f"Impossible d'écrire le PDF :\n{e}")
+                self, tr("Échec de l'export"),
+                tr("Impossible d'écrire le PDF :\n{err}").format(err=e))
             return
         finally:
             self.canvas.set_handles_visible(True)
@@ -587,8 +591,8 @@ class MainWindow(QMainWindow):
 
         n = cols * rows
         self.statusBar().showMessage(
-            f"PDF exporté : {Path(path).name} "
-            f"({n} page{'s' if n > 1 else ''})")
+            tr("PDF exporté : {name} ({n} page(s))").format(
+                name=Path(path).name, n=n))
 
     def _render_pdf_document(self, path: str, source: QRectF,
                              page_size_id, pages_wide: int,
@@ -746,22 +750,23 @@ class MainWindow(QMainWindow):
         subnets = detect_subnets()
         if not subnets:
             network, ok = QInputDialog.getText(
-                self, "Scanner le réseau",
-                "Aucun sous-réseau détecté. Saisissez un CIDR :",
+                self, tr("Scanner le réseau"),
+                tr("Aucun sous-réseau détecté. Saisissez un CIDR :"),
                 text="192.168.1.0/24")
         elif len(subnets) == 1:
             network, ok = QInputDialog.getText(
-                self, "Scanner le réseau", "Sous-réseau à scanner :",
+                self, tr("Scanner le réseau"), tr("Sous-réseau à scanner :"),
                 text=subnets[0])
         else:
             network, ok = QInputDialog.getItem(
-                self, "Scanner le réseau",
-                "Plusieurs sous-réseaux détectés :", subnets, 0, True)
+                self, tr("Scanner le réseau"),
+                tr("Plusieurs sous-réseaux détectés :"), subnets, 0, True)
         if not ok or not network.strip():
             return
 
         self.act_scan.setEnabled(False)
-        self.statusBar().showMessage(f"Scan de {network} en cours…")
+        self.statusBar().showMessage(
+            tr("Scan de {network} en cours…").format(network=network))
         worker = ScanWorker(network.strip(), self)
         worker.succeeded.connect(self._on_scan_done)
         worker.failed.connect(self._on_scan_failed)
@@ -780,16 +785,16 @@ class MainWindow(QMainWindow):
         self._set_dirty(True)
         self._record_history()
         self.statusBar().showMessage(
-            f"Scan terminé : {len(discovered)} device(s) détecté(s), "
-            f"{len(diff.appeared)} nouveau(x).")
+            tr("Scan terminé : {n} device(s) détecté(s), {new} nouveau(x).")
+            .format(n=len(discovered), new=len(diff.appeared)))
         if diff.has_changes:
             QMessageBox.information(
-                self, "Changements du scan",
+                self, tr("Changements du scan"),
                 format_scan_diff(diff, self.inv))
 
     def _on_scan_failed(self, message: str) -> None:
-        QMessageBox.warning(self, "Échec du scan", message)
-        self.statusBar().showMessage("Scan échoué")
+        QMessageBox.warning(self, tr("Échec du scan"), message)
+        self.statusBar().showMessage(tr("Scan échoué"))
 
     def _on_scan_finished(self) -> None:
         self.act_scan.setEnabled(True)
@@ -807,7 +812,8 @@ class MainWindow(QMainWindow):
         self._set_dirty(True)
         self._record_history()
         self.statusBar().showMessage(
-            f"Device ajouté : {host.custom_name or host.mac}")
+            tr("Device ajouté : {name}").format(
+                name=host.custom_name or host.mac))
 
     def _connect_devices(self) -> None:
         """Ouvre l'écran « Relier » pour créer plusieurs liaisons d'un coup.
@@ -817,9 +823,9 @@ class MainWindow(QMainWindow):
         """
         if len(self.inv.hosts) < 2:
             QMessageBox.information(
-                self, "Pas assez d'appareils",
-                "Il faut au moins deux appareils sur la carte pour créer "
-                "une liaison.")
+                self, tr("Pas assez d'appareils"),
+                tr("Il faut au moins deux appareils sur la carte pour créer "
+                   "une liaison."))
             return
         sel = self.canvas.selected_macs()
         source = sel[0] if len(sel) >= 1 else None
@@ -843,12 +849,13 @@ class MainWindow(QMainWindow):
         peer_name = (b_host.custom_name or b_host.mac) if b_host else first.mac_b
         n = len(dlg.new_links)
         self.statusBar().showMessage(
-            f"{n} liaison(s) cree(s) avec {peer_name}")
+            tr("{n} liaison(s) créée(s) avec {peer}").format(
+                n=n, peer=peer_name))
 
     def _delete_selected(self) -> None:
         mac = self.canvas.selected_mac()
         if mac is None:
-            self.statusBar().showMessage("Aucun device selectionne")
+            self.statusBar().showMessage(tr("Aucun device sélectionné"))
             return
         host = self.inv.hosts.get(mac)
         if host is None:
@@ -865,7 +872,7 @@ class MainWindow(QMainWindow):
         self.inspector.refresh_title()
         self._set_dirty(True)
         self._record_history()
-        self.statusBar().showMessage("Modifications appliquees")
+        self.statusBar().showMessage(tr("Modifications appliquées"))
 
     def _on_host_deleted(self, mac: str) -> None:
         self.inv.hosts.pop(mac, None)
@@ -878,7 +885,7 @@ class MainWindow(QMainWindow):
         self.inspector.set_host(None, self.inv)
         self._set_dirty(True)
         self._record_history()
-        self.statusBar().showMessage("Device supprime")
+        self.statusBar().showMessage(tr("Device supprimé"))
 
     def _relayout(self) -> None:
         positions = layout_mod.auto_layout(self.inv)
@@ -888,13 +895,14 @@ class MainWindow(QMainWindow):
         self.canvas.fit_all()
         self._set_dirty(True)
         self._record_history()
-        self.statusBar().showMessage("Carte reorganisee par etage et piece")
+        self.statusBar().showMessage(
+            tr("Carte réorganisée par étage et pièce"))
 
     def _set_routing(self, style: str) -> None:
         self.canvas.set_routing_style(style)
         self._set_dirty(True)
         self._record_history()
-        self.statusBar().showMessage("Style de liaison applique")
+        self.statusBar().showMessage(tr("Style de liaison appliqué"))
 
     def _sync_routing_menu(self) -> None:
         act = self.routing_actions.get(self.canvas.routing_style)
@@ -905,7 +913,7 @@ class MainWindow(QMainWindow):
         self.canvas.reset_all_bends()
         self._set_dirty(True)
         self._record_history()
-        self.statusBar().showMessage("Coudes des liaisons reinitialises")
+        self.statusBar().showMessage(tr("Coudes des liaisons réinitialisés"))
 
     def _set_language(self, code: str) -> None:
         i18n.save_language(code)
@@ -933,7 +941,8 @@ class MainWindow(QMainWindow):
     def _on_search(self, text: str) -> None:
         n = self.canvas.filter_nodes(text)
         if text.strip():
-            self.statusBar().showMessage(f"{n} appareil(s) correspondant(s)")
+            self.statusBar().showMessage(
+                tr("{n} appareil(s) correspondant(s)").format(n=n))
 
     def _on_search_enter(self) -> None:
         self.canvas.center_on_first_match(self._search.text())
@@ -956,8 +965,8 @@ class MainWindow(QMainWindow):
             return
         if _resolve_device_type(host) not in ("switch", "outlet", "patchpanel"):
             self.statusBar().showMessage(
-                "Double-clic : gestion des ports reservee aux switches, "
-                "prises murales et patch panels")
+                tr("Double-clic : gestion des ports réservée aux switches, "
+                   "prises murales et patch panels"))
             return
         dlg = SwitchPortDialog(host, self.inv,
                                self._switch_ports.get(mac), self)
@@ -966,14 +975,15 @@ class MainWindow(QMainWindow):
             self._set_dirty(True)
             self._record_history()
             self.statusBar().showMessage(
-                f"{host.custom_name or mac} : {dlg.port_count} ports declares")
+                tr("{name} : {count} ports déclarés").format(
+                    name=host.custom_name or mac, count=dlg.port_count))
 
     def _confirm_discard(self) -> bool:
         if not self._dirty:
             return True
         choice = QMessageBox.question(
-            self, "Modifications non enregistrees",
-            "Enregistrer les modifications avant de continuer ?",
+            self, tr("Modifications non enregistrées"),
+            tr("Enregistrer les modifications avant de continuer ?"),
             QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
         if choice == QMessageBox.Save:
             return self._save()

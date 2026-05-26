@@ -68,6 +68,65 @@ _CATALOG: dict[str, dict[str, str]] = {
         "Langue modifiée": "Language changed",
         "La langue sera appliquée au prochain démarrage.":
             "The language will be applied on the next start.",
+        # --- Chargement / sauvegarde / export ---
+        "Ouvrir un inventaire": "Open inventory",
+        "Inventaire illisible": "Unreadable inventory",
+        "Impossible de charger {path} :\n{err}":
+            "Could not load {path}:\n{err}",
+        "{n} device(s) chargé(s) depuis {name}":
+            "{n} device(s) loaded from {name}",
+        "Inventaire YAML (*.yaml *.yml);;Tous les fichiers (*)":
+            "YAML inventory (*.yaml *.yml);;All files (*)",
+        "Échec de l'enregistrement": "Save failed",
+        "Impossible d'écrire {path} :\n{err}":
+            "Could not write {path}:\n{err}",
+        "Enregistré : {name}": "Saved: {name}",
+        "Enregistrer l'inventaire sous": "Save inventory as",
+        "Inventaire YAML (*.yaml)": "YAML inventory (*.yaml)",
+        "Rien à exporter": "Nothing to export",
+        "La carte est vide. Scannez le réseau ou ajoutez un device.":
+            "The map is empty. Scan the network or add a device.",
+        "Exporter la carte en PDF": "Export the map to PDF",
+        "Document PDF (*.pdf)": "PDF document (*.pdf)",
+        "Échec de l'export": "Export failed",
+        "Impossible d'écrire le PDF :\n{err}":
+            "Could not write the PDF:\n{err}",
+        "PDF exporté : {name} ({n} page(s))":
+            "PDF exported: {name} ({n} page(s))",
+        # --- Scan ---
+        "Aucun sous-réseau détecté. Saisissez un CIDR :":
+            "No subnet detected. Enter a CIDR:",
+        "Sous-réseau à scanner :": "Subnet to scan:",
+        "Plusieurs sous-réseaux détectés :": "Several subnets detected:",
+        "Scan de {network} en cours…": "Scanning {network}…",
+        "Scan terminé : {n} device(s) détecté(s), {new} nouveau(x).":
+            "Scan complete: {n} device(s) found, {new} new.",
+        "Changements du scan": "Scan changes",
+        "Échec du scan": "Scan failed",
+        "Scan échoué": "Scan failed",
+        # --- Édition ---
+        "Device ajouté : {name}": "Device added: {name}",
+        "Pas assez d'appareils": "Not enough devices",
+        "Il faut au moins deux appareils sur la carte pour créer une liaison.":
+            "You need at least two devices on the map to create a link.",
+        "{n} liaison(s) créée(s) avec {peer}":
+            "{n} link(s) created with {peer}",
+        "Aucun device sélectionné": "No device selected",
+        "Modifications appliquées": "Changes applied",
+        "Device supprimé": "Device deleted",
+        "Carte réorganisée par étage et pièce":
+            "Map rearranged by floor and room",
+        "Style de liaison appliqué": "Link style applied",
+        "Coudes des liaisons réinitialisés": "Link bends reset",
+        "{n} appareil(s) correspondant(s)": "{n} matching device(s)",
+        "Double-clic : gestion des ports réservée aux switches, "
+        "prises murales et patch panels":
+            "Double-click: port management is reserved for switches, outlets "
+            "and patch panels",
+        "{name} : {count} ports déclarés": "{name}: {count} ports declared",
+        "Modifications non enregistrées": "Unsaved changes",
+        "Enregistrer les modifications avant de continuer ?":
+            "Save changes before continuing?",
     },
 }
 

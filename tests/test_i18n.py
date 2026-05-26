@@ -50,3 +50,31 @@ def test_english_catalog_covers_key_chrome_strings():
     for src in ("Nouveau", "Enregistrer", "Annuler", "Rétablir",
                 "Ajouter un device", "Fermer l'inventaire"):
         assert src in i18n._CATALOG["en"], src
+
+
+def _tr_literals(path):
+    """Toutes les chaînes littérales passées à tr(...) dans un fichier."""
+    import ast
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    out = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "tr" and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)):
+            out.append(node.args[0].value)
+    return out
+
+
+def test_every_wrapped_gui_string_has_english_translation():
+    """Toute chaîne enrobée dans tr("…") du GUI doit avoir une entrée EN."""
+    import pathlib
+    import intramap.gui as guipkg
+    gui_dir = pathlib.Path(guipkg.__file__).parent
+    missing = []
+    for py in sorted(gui_dir.glob("*.py")):
+        for lit in _tr_literals(py):
+            if lit not in i18n._CATALOG["en"]:
+                missing.append(f"{py.name}: {lit!r}")
+    assert not missing, (
+        "Chaînes enrobées sans traduction EN :\n" + "\n".join(missing))
