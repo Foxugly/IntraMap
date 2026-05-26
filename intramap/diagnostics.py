@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from intramap.i18n import tr
 from intramap.models import Inventory, _resolve_device_type, trace_all_paths
 
 # Types d'appareils considérés comme des points d'accès Wi-Fi valides.
@@ -38,7 +39,8 @@ def diagnose(inv: Inventory) -> list[Finding]:
         if lk.mac_a == lk.mac_b:
             findings.append(Finding(
                 "error", "broken-link",
-                f"Câble en boucle sur un même appareil ({lk.mac_a}).",
+                tr("Câble en boucle sur un même appareil ({mac}).").format(
+                    mac=lk.mac_a),
                 (lk.mac_a,)))
             continue
         missing = [m for m in (lk.mac_a, lk.mac_b) if m not in inv.hosts]
@@ -46,16 +48,16 @@ def diagnose(inv: Inventory) -> list[Finding]:
             present = tuple(m for m in (lk.mac_a, lk.mac_b) if m in inv.hosts)
             findings.append(Finding(
                 "error", "broken-link",
-                f"Câble vers une MAC absente de l'inventaire : "
-                f"{', '.join(missing)}.", present))
+                tr("Câble vers une MAC absente de l'inventaire : {macs}.")
+                .format(macs=', '.join(missing)), present))
 
     # 4a. Passerelle Internet absente.
     gateways = [h for h in inv.hosts.values() if h.is_gateway]
     if not gateways:
         findings.append(Finding(
             "warning", "gateway",
-            "Aucune passerelle Internet déclarée (cochez « Passerelle "
-            "Internet » sur la box).", ()))
+            tr("Aucune passerelle Internet déclarée (cochez « Passerelle "
+               "Internet » sur la box)."), ()))
 
     # 2. Appareils sans chemin (seulement si une passerelle existe, sinon le
     #    point 4a couvre déjà le problème et on éviterait le bruit).
@@ -67,8 +69,8 @@ def diagnose(inv: Inventory) -> list[Finding]:
             if not paths.get(mac):
                 findings.append(Finding(
                     "warning", "unreachable",
-                    f"« {_name(host)} » n'atteint aucune passerelle Internet.",
-                    (mac,)))
+                    tr("« {name} » n'atteint aucune passerelle Internet.")
+                    .format(name=_name(host)), (mac,)))
 
     # 3. Port physique sur-souscrit (hors patch panel en pass-through).
     for mac, host in inv.hosts.items():
@@ -88,11 +90,12 @@ def diagnose(inv: Inventory) -> list[Finding]:
             if c <= limit:
                 continue
             if is_pp:
-                msg = (f"Port {p} de « {_name(host)} » (patch panel) : "
-                       f"{c} câbles (2 max en pass-through).")
+                msg = tr("Port {p} de « {name} » (patch panel) : {c} câbles "
+                         "(2 max en pass-through).").format(
+                    p=p, name=_name(host), c=c)
             else:
-                msg = (f"Port {p} de « {_name(host)} » : {c} câbles "
-                       f"branchés (un seul attendu).")
+                msg = tr("Port {p} de « {name} » : {c} câbles branchés "
+                         "(un seul attendu).").format(p=p, name=_name(host), c=c)
             findings.append(Finding("warning", "port-conflict", msg, (mac,)))
 
     # 4b. Associations Wi-Fi invalides.
@@ -103,14 +106,14 @@ def diagnose(inv: Inventory) -> list[Finding]:
         if ap not in inv.hosts:
             findings.append(Finding(
                 "error", "wifi",
-                f"« {_name(host)} » est associé en Wi-Fi à une MAC inconnue "
-                f"({ap}).", (mac,)))
+                tr("« {name} » est associé en Wi-Fi à une MAC inconnue "
+                   "({ap}).").format(name=_name(host), ap=ap), (mac,)))
         elif _resolve_device_type(inv.hosts[ap]) not in _AP_TYPES:
             findings.append(Finding(
                 "warning", "wifi",
-                f"« {_name(host)} » est associé en Wi-Fi à "
-                f"« {_name(inv.hosts[ap])} », qui n'est pas un point d'accès.",
-                (mac, ap)))
+                tr("« {name} » est associé en Wi-Fi à « {peer} », qui n'est "
+                   "pas un point d'accès.").format(
+                    name=_name(host), peer=_name(inv.hosts[ap])), (mac, ap)))
 
     findings.sort(key=lambda f: (_SEVERITY_ORDER.get(f.severity, 9),
                                  f.category))

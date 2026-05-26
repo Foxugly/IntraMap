@@ -9,6 +9,7 @@ from pathlib import Path
 
 import psutil
 
+from intramap import i18n
 from intramap import inventory as inventory_mod
 from intramap import scanner
 from intramap.models import Inventory, _resolve_device_type
@@ -284,6 +285,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--inventory", default="inventory.yaml",
         help="Path to the inventory YAML file (default: inventory.yaml)",
     )
+    parser.add_argument(
+        "--lang", choices=["fr", "en"], default=None,
+        help="Report language (default: system locale)",
+    )
     subs = parser.add_subparsers(dest="command", required=True)
 
     p_list = subs.add_parser("list", help="List inventory contents")
@@ -341,6 +346,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    # Langue des rapports : --lang explicite, sinon la locale système.
+    i18n.set_language(args.lang or i18n.resolve_system_language())
     return args.func(args)
 
 

@@ -11,6 +11,19 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _reset_i18n_language():
+    """Isolation : chaque test repart en français (langue source).
+
+    `cli.main()` et certains tests changent la langue globale ; sans reset,
+    cela ferait fuiter l'anglais sur des tests qui attendent du français.
+    """
+    from intramap import i18n
+    i18n.set_language("fr")
+    yield
+    i18n.set_language("fr")
+
+
 @pytest.fixture(scope="session")
 def qapp():
     """QApplication unique pour la session de tests GUI.

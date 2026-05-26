@@ -83,3 +83,37 @@ def test_every_wrapped_string_has_english_translation():
                 missing.append(f"{py.name}: {lit!r}")
     assert not missing, (
         "Chaînes enrobées sans traduction EN :\n" + "\n".join(missing))
+
+
+def test_report_builders_translate_to_english():
+    from datetime import datetime
+    from intramap.models import Host, Inventory, Link
+    from intramap.wiring_report import build_wiring_report
+    from intramap.path_report import build_report
+    from intramap.diagnostics import diagnose
+    from intramap.scan_diff import diff_inventories, format_scan_diff
+
+    now = datetime(2026, 5, 27)
+
+    def _host(mac, **kw):
+        d = dict(ip=None, hostname=None, vendor=None,
+                 first_seen=now, last_seen=now)
+        d.update(kw)
+        return Host(mac=mac, **d)
+
+    gw = _host("aa:bb:cc:dd:ee:01", is_gateway=True, device_type="router",
+               custom_name="Box")
+    sw = _host("aa:bb:cc:dd:ee:02", device_type="switch", custom_name="SW")
+    inv = Inventory(hosts={gw.mac: gw, sw.mac: sw},
+                    links=[Link(mac_a=sw.mac, port_a=1,
+                                mac_b=gw.mac, port_b=8)])
+
+    i18n.set_language("en")
+    assert "Infrastructure device wiring" in build_wiring_report(inv)
+    assert "Internet access ✓" in build_report(inv)
+    no_gw = Inventory(hosts={sw.mac: sw})
+    msgs = " ".join(f.message for f in diagnose(no_gw))
+    assert "No Internet gateway declared" in msgs
+    after = Inventory(hosts={sw.mac: sw})
+    assert "New (" in format_scan_diff(diff_inventories(Inventory(), after),
+                                       after)

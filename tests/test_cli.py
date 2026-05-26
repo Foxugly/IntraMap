@@ -286,7 +286,7 @@ def test_scan_diff_lists_new_device(tmp_path: Path, capsys):
     fake = [DiscoveredHost(mac="aa:bb:cc:dd:ee:09", ip="192.168.1.9",
                            hostname="new", vendor="Apple")]
     with patch("intramap.cli.scanner.scan", return_value=fake):
-        rc = main(["--inventory", str(inv_path), "scan",
+        rc = main(["--inventory", str(inv_path), "--lang", "fr", "scan",
                    "--network", "192.168.1.0/24"])
     out = capsys.readouterr().out
     assert rc == 0
@@ -607,16 +607,29 @@ def _seed_wired(path: Path) -> None:
 def test_report_wiring_text_to_stdout(tmp_path, capsys):
     inv_path = tmp_path / "inv.yaml"
     _seed_wired(inv_path)
-    rc = main(["--inventory", str(inv_path), "report", "wiring"])
+    rc = main(["--inventory", str(inv_path), "--lang", "fr",
+               "report", "wiring"])
     out = capsys.readouterr().out
     assert rc == 0
     assert "Branchements des appareils d'infrastructure" in out
 
 
+def test_report_wiring_text_english(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_wired(inv_path)
+    rc = main(["--inventory", str(inv_path), "--lang", "en",
+               "report", "wiring"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Infrastructure device wiring" in out
+    assert "Branchements" not in out
+
+
 def test_report_paths_text_to_stdout(tmp_path, capsys):
     inv_path = tmp_path / "inv.yaml"
     _seed_wired(inv_path)
-    rc = main(["--inventory", str(inv_path), "report", "paths"])
+    rc = main(["--inventory", str(inv_path), "--lang", "fr",
+               "report", "paths"])
     out = capsys.readouterr().out
     assert rc == 0
     assert "Accès Internet" in out
@@ -625,7 +638,8 @@ def test_report_paths_text_to_stdout(tmp_path, capsys):
 def test_report_all_contains_both(tmp_path, capsys):
     inv_path = tmp_path / "inv.yaml"
     _seed_wired(inv_path)
-    rc = main(["--inventory", str(inv_path), "report", "all"])
+    rc = main(["--inventory", str(inv_path), "--lang", "fr",
+               "report", "all"])
     out = capsys.readouterr().out
     assert rc == 0
     assert "Branchements des appareils" in out

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from intramap.i18n import tr
 from intramap.models import Inventory
 
 
@@ -58,18 +59,20 @@ def format_scan_diff(diff: ScanDiff, inv: Inventory) -> str:
 
     lines: list[str] = []
     if diff.appeared:
-        lines.append(f"Nouveaux ({len(diff.appeared)}) :")
+        lines.append(tr("Nouveaux ({n}) :").format(n=len(diff.appeared)))
         lines += [f"  + {label(m)}" for m in diff.appeared]
     if diff.gone_offline:
-        lines.append(f"Passés hors ligne ({len(diff.gone_offline)}) :")
+        lines.append(
+            tr("Passés hors ligne ({n}) :").format(n=len(diff.gone_offline)))
         lines += [f"  - {label(m)}" for m in diff.gone_offline]
     if diff.back_online:
-        lines.append(f"Revenus en ligne ({len(diff.back_online)}) :")
+        lines.append(
+            tr("Revenus en ligne ({n}) :").format(n=len(diff.back_online)))
         lines += [f"  ↑ {label(m)}" for m in diff.back_online]
     if diff.ip_changed:
-        lines.append(f"IP modifiée ({len(diff.ip_changed)}) :")
+        lines.append(tr("IP modifiée ({n}) :").format(n=len(diff.ip_changed)))
         lines += [f"  ~ {label(m)} : {old or '—'} → {new or '—'}"
                   for m, old, new in diff.ip_changed]
     if not lines:
-        return "Aucun changement depuis le dernier scan.\n"
+        return tr("Aucun changement depuis le dernier scan.") + "\n"
     return "\n".join(lines) + "\n"

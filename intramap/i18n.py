@@ -311,6 +311,68 @@ _CATALOG: dict[str, dict[str, str]] = {
         # --- Cadres de groupe ---
         "Glisser l'en-tête pour déplacer tout l'étage":
             "Drag the header to move the whole floor",
+        # --- Rapport de câblage (contenu) ---
+        "Aucun appareil dans l'inventaire.": "No device in the inventory.",
+        "Aucun appareil d'infrastructure (routeur, switch, patch panel, "
+        "outlet) dans l'inventaire.":
+            "No infrastructure device (router, switch, patch panel, outlet) "
+            "in the inventory.",
+        "Branchements des appareils d'infrastructure":
+            "Infrastructure device wiring",
+        "Routeur": "Router",
+        "Outlet (prise murale)": "Outlet (wall jack)",
+        "(aucun branchement)": "(no connection)",
+        "port {p}": "port {p}",
+        "(port ?)": "(port ?)",
+        "PoE": "PoE",
+        # --- Rapport des chemins (contenu) ---
+        "Aucun appareil sur la carte.": "No device on the map.",
+        "Wi-Fi": "Wi-Fi",
+        "→ port {p}": "→ port {p}",
+        "alimenté en PoE": "PoE-powered",
+        "Passerelle Internet (accès box).": "Internet gateway (box access).",
+        "aucun chemin PoE trouvé jusqu'à la passerelle Internet (PoE rompu, "
+        "ou pas de chemin par les appareils d'infrastructure)":
+            "no PoE path found to the Internet gateway (PoE broken, or no "
+            "path through infrastructure devices)",
+        "aucun chemin trouvé jusqu'à la passerelle Internet (pas de liaison "
+        "vers un switch / patch panel qui y mène)":
+            "no path found to the Internet gateway (no link to a switch / "
+            "patch panel leading there)",
+        "Accès Internet ✓": "Internet access ✓",
+        "chemin partiel — «{prev}» n'atteint pas la passerelle Internet":
+            "partial path — «{prev}» does not reach the Internet gateway",
+        # --- Diagnostics (messages) ---
+        "Câble en boucle sur un même appareil ({mac}).":
+            "Cable looping on the same device ({mac}).",
+        "Câble vers une MAC absente de l'inventaire : {macs}.":
+            "Cable to a MAC missing from the inventory: {macs}.",
+        "Aucune passerelle Internet déclarée (cochez « Passerelle Internet » "
+        "sur la box).":
+            "No Internet gateway declared (check « Internet gateway » on the "
+            "box).",
+        "« {name} » n'atteint aucune passerelle Internet.":
+            "« {name} » does not reach any Internet gateway.",
+        "Port {p} de « {name} » (patch panel) : {c} câbles "
+        "(2 max en pass-through).":
+            "Port {p} of « {name} » (patch panel): {c} cables "
+            "(2 max in pass-through).",
+        "Port {p} de « {name} » : {c} câbles branchés (un seul attendu).":
+            "Port {p} of « {name} »: {c} cables plugged in (only one "
+            "expected).",
+        "« {name} » est associé en Wi-Fi à une MAC inconnue ({ap}).":
+            "« {name} » is Wi-Fi-associated to an unknown MAC ({ap}).",
+        "« {name} » est associé en Wi-Fi à « {peer} », qui n'est pas un "
+        "point d'accès.":
+            "« {name} » is Wi-Fi-associated to « {peer} », which is not an "
+            "access point.",
+        # --- Diff de scan (contenu) ---
+        "Nouveaux ({n}) :": "New ({n}):",
+        "Passés hors ligne ({n}) :": "Gone offline ({n}):",
+        "Revenus en ligne ({n}) :": "Back online ({n}):",
+        "IP modifiée ({n}) :": "IP changed ({n}):",
+        "Aucun changement depuis le dernier scan.":
+            "No change since the last scan.",
     },
 }
 

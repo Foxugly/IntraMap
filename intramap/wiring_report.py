@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import io
 
+from intramap.i18n import tr
 from intramap.models import (
     Inventory, Link, links_touching, _resolve_device_type,
 )
@@ -62,7 +63,7 @@ def build_wiring_report(inv: Inventory) -> str:
     dans un PDF mis en page automatiquement.
     """
     if not inv.hosts:
-        return "Aucun appareil dans l'inventaire.\n"
+        return tr("Aucun appareil dans l'inventaire.") + "\n"
 
     # Regroupement par type d'infra dans l'ordre voulu.
     by_type: dict[str, list] = {t: [] for t in INFRA_TYPES_ORDER}
@@ -74,11 +75,11 @@ def build_wiring_report(inv: Inventory) -> str:
         by_type[t].sort(key=lambda h: _device_name(h).lower())
 
     if not any(by_type.values()):
-        return ("Aucun appareil d'infrastructure (routeur, switch, "
-                "patch panel, outlet) dans l'inventaire.\n")
+        return (tr("Aucun appareil d'infrastructure (routeur, switch, "
+                   "patch panel, outlet) dans l'inventaire.") + "\n")
 
     lines: list[str] = []
-    lines.append("Branchements des appareils d'infrastructure")
+    lines.append(tr("Branchements des appareils d'infrastructure"))
     lines.append("=" * 50)
     lines.append("")
 
@@ -86,7 +87,7 @@ def build_wiring_report(inv: Inventory) -> str:
         hosts = by_type[t]
         if not hosts:
             continue
-        lines.append(f"## {_INFRA_LABEL[t]} ({len(hosts)})")
+        lines.append(f"## {tr(_INFRA_LABEL[t])} ({len(hosts)})")
         lines.append("")
         for host in hosts:
             head = f"- {_device_name(host)}  [{host.mac}]"
@@ -101,7 +102,7 @@ def build_wiring_report(inv: Inventory) -> str:
 
             links = links_touching(inv, host.mac)
             if not links:
-                lines.append("    (aucun branchement)")
+                lines.append("    " + tr("(aucun branchement)"))
                 lines.append("")
                 continue
 
@@ -119,16 +120,18 @@ def build_wiring_report(inv: Inventory) -> str:
                 peer_name, peer_port, peer_type, peer_label = _peer_info(
                     inv, lk, host.mac)
 
-                here = (f"port {p_here}" if p_here is not None else "(port ?)")
+                here = (tr("port {p}").format(p=p_here)
+                        if p_here is not None else tr("(port ?)"))
                 if p_label_here:
                     here += f" [{p_label_here}]"
-                peer = (f"port {peer_port}" if peer_port is not None else "(port ?)")
+                peer = (tr("port {p}").format(p=peer_port)
+                        if peer_port is not None else tr("(port ?)"))
                 if peer_label:
                     peer += f" [{peer_label}]"
 
                 line = (f"    {here}  ->  {peer_name} ({peer_type})  -  {peer}")
                 if lk.poe:
-                    line += "   PoE"
+                    line += "   " + tr("PoE")
                 lines.append(line)
             lines.append("")
         lines.append("")
