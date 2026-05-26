@@ -14,6 +14,8 @@ from intramap import scanner
 from intramap.models import _resolve_device_type
 from intramap.renderers import plantuml as plantuml_renderer
 from intramap.renderers import graphviz as graphviz_renderer
+from intramap.wiring_report import build_wiring_report, build_wiring_csv
+from intramap.path_report import build_report as build_path_report
 
 
 def _load_or_report(inv_path: Path):
@@ -137,6 +139,37 @@ def _render_graphviz_image(out_dir: Path) -> None:
             )
 
 
+def _cmd_report(args: argparse.Namespace) -> int:
+    if args.format == "csv" and args.type != "wiring":
+        print("--format csv is only supported for the 'wiring' report.",
+              file=sys.stderr)
+        return 2
+
+    inv, err = _load_or_report(Path(args.inventory))
+    if err:
+        return err
+
+    if args.format == "csv":
+        text = build_wiring_csv(inv)
+    elif args.type == "wiring":
+        text = build_wiring_report(inv)
+    elif args.type == "paths":
+        text = build_path_report(inv)
+    else:  # all
+        text = (build_wiring_report(inv)
+                + "\n" + "=" * 60 + "\n\n"
+                + build_path_report(inv))
+
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(text, encoding="utf-8")
+        print(f"Wrote {out_path}")
+    else:
+        sys.stdout.write(text)
+    return 0
+
+
 def _detect_subnets() -> list[str]:
     """Return candidate IPv4 subnets from active local interfaces.
 
@@ -255,6 +288,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_scan.add_argument("--network",
                         help="CIDR subnet to scan (auto-detected if omitted)")
     p_scan.set_defaults(func=_cmd_scan)
+
+    p_report = subs.add_parser("report",
+                               help="Print wiring / network-path reports")
+    p_report.add_argument("type", choices=["wiring", "paths", "all"],
+                          help="which report to print")
+    p_report.add_argument("--format", choices=["text", "csv"], default="text",
+                          help="output format; csv is only valid for 'wiring'")
+    p_report.add_argument("--output", default=None,
+                          help="write to this file instead of stdout")
+    p_report.set_defaults(func=_cmd_report)
 
     return parser
 

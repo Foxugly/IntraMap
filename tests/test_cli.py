@@ -6,7 +6,7 @@ import pytest
 
 from intramap.cli import main
 from intramap.inventory import save
-from intramap.models import DiscoveredHost, Host, Inventory, Location
+from intramap.models import DiscoveredHost, Host, Inventory, Link, Location
 
 
 def _seed_inventory(path: Path) -> None:
@@ -530,3 +530,97 @@ def test_render_image_warns_when_dot_missing(tmp_path, capsys):
     assert rc == 0  # text files still written, image is best-effort
     assert "dot" in captured.err.lower()
     assert (out_dir / "network.dot").is_file()
+
+
+# ---------------------------------------------------------------------------
+# report : export des rapports en CLI
+# ---------------------------------------------------------------------------
+
+def _seed_wired(path: Path) -> None:
+    from intramap.inventory import save
+    now = datetime(2026, 5, 24, 14, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1", hostname=None,
+            vendor=None, custom_name="Box", device_type="router",
+            is_gateway=True, location=Location(floor="RDC", room="Salon"),
+            first_seen=now, last_seen=now),
+        "aa:bb:cc:dd:ee:02": Host(
+            mac="aa:bb:cc:dd:ee:02", ip="192.168.1.2", hostname=None,
+            vendor=None, custom_name="SW", device_type="switch",
+            location=Location(floor="RDC", room="Salon"),
+            first_seen=now, last_seen=now),
+    }, links=[Link(mac_a="aa:bb:cc:dd:ee:02", port_a=1,
+                   mac_b="aa:bb:cc:dd:ee:01", port_b=8)], last_scan=now)
+    save(inv, path)
+
+
+def test_report_wiring_text_to_stdout(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_wired(inv_path)
+    rc = main(["--inventory", str(inv_path), "report", "wiring"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Branchements des appareils d'infrastructure" in out
+
+
+def test_report_paths_text_to_stdout(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_wired(inv_path)
+    rc = main(["--inventory", str(inv_path), "report", "paths"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Accès Internet" in out
+
+
+def test_report_all_contains_both(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_wired(inv_path)
+    rc = main(["--inventory", str(inv_path), "report", "all"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Branchements des appareils" in out
+    assert "Accès Internet" in out
+
+
+def test_report_wiring_csv_header(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_wired(inv_path)
+    rc = main(["--inventory", str(inv_path), "report", "wiring",
+               "--format", "csv"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert out.splitlines()[0] == (
+        "device,mac,floor,room,local_port,local_label,"
+        "peer,peer_type,peer_port,peer_label,poe")
+
+
+def test_report_csv_rejected_for_paths(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_wired(inv_path)
+    rc = main(["--inventory", str(inv_path), "report", "paths",
+               "--format", "csv"])
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "csv" in (captured.out + captured.err).lower()
+
+
+def test_report_output_writes_file(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_wired(inv_path)
+    out_file = tmp_path / "wiring.csv"
+    rc = main(["--inventory", str(inv_path), "report", "wiring",
+               "--format", "csv", "--output", str(out_file)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert out_file.is_file()
+    assert "device,mac,floor" in out_file.read_text(encoding="utf-8")
+    assert "Wrote" in out
+
+
+def test_report_missing_inventory_errors(tmp_path, capsys):
+    rc = main(["--inventory", str(tmp_path / "absent.yaml"), "report",
+               "wiring"])
+    captured = capsys.readouterr()
+    assert rc != 0
+    assert "inventory" in (captured.out + captured.err).lower()
