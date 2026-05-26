@@ -108,98 +108,100 @@ class MainWindow(QMainWindow):
     def _build_actions(self) -> None:
         st = QStyle
         self.act_new = QAction(self._icon(st.SP_FileIcon),
-                               "Nouveau", self)
+                               tr("Nouveau"), self)
         self.act_new.setShortcut(QKeySequence.New)
         self.act_new.triggered.connect(self._new_inventory)
 
         self.act_open = QAction(self._icon(st.SP_DialogOpenButton),
-                                "Ouvrir un inventaire…", self)
+                                tr("Ouvrir un inventaire…"), self)
         self.act_open.setShortcut(QKeySequence.Open)
         self.act_open.triggered.connect(self._open_inventory)
 
-        self.act_close = QAction("Fermer l'inventaire", self)
+        self.act_close = QAction(tr("Fermer l'inventaire"), self)
         self.act_close.setShortcut("Ctrl+W")
         self.act_close.triggered.connect(self._close_inventory)
 
         self.act_save = QAction(self._icon(st.SP_DialogSaveButton),
-                                "Enregistrer", self)
+                                tr("Enregistrer"), self)
         self.act_save.setShortcut(QKeySequence.Save)
         self.act_save.triggered.connect(self._save)
 
-        self.act_save_as = QAction("Enregistrer sous…", self)
+        self.act_save_as = QAction(tr("Enregistrer sous…"), self)
         self.act_save_as.setShortcut(QKeySequence.SaveAs)
         self.act_save_as.triggered.connect(self._save_as)
 
         self.act_export = QAction(self._icon(st.SP_FileIcon),
-                                  "Exporter en PDF…", self)
+                                  tr("Exporter en PDF…"), self)
         self.act_export.setShortcut("Ctrl+E")
         self.act_export.triggered.connect(self._export_pdf)
 
-        self.act_undo = QAction(self._icon(st.SP_ArrowBack), "Annuler", self)
+        self.act_undo = QAction(self._icon(st.SP_ArrowBack), tr("Annuler"),
+                                self)
         self.act_undo.setShortcut(QKeySequence.Undo)
         self.act_undo.setEnabled(False)
         self.act_undo.triggered.connect(self._undo)
 
-        self.act_redo = QAction(self._icon(st.SP_ArrowForward), "Rétablir",
+        self.act_redo = QAction(self._icon(st.SP_ArrowForward), tr("Rétablir"),
                                 self)
         self.act_redo.setShortcut(QKeySequence.Redo)
         self.act_redo.setEnabled(False)
         self.act_redo.triggered.connect(self._redo)
 
         self.act_scan = QAction(self._icon(st.SP_BrowserReload),
-                                "Scanner le réseau", self)
+                                tr("Scanner le réseau"), self)
         self.act_scan.setShortcut("Ctrl+R")
         self.act_scan.triggered.connect(self._scan)
 
         self.act_add = QAction(self._icon(st.SP_FileDialogNewFolder),
-                               "Ajouter un device", self)
+                               tr("Ajouter un device"), self)
         # Ctrl+N est réservé à « Nouveau » (convention) ; l'ajout d'appareil
         # passe sur Ctrl+Shift+N.
         self.act_add.setShortcut("Ctrl+Shift+N")
         self.act_add.triggered.connect(self._add_device)
 
         self.act_connect = QAction(self._icon(st.SP_FileLinkIcon),
-                                   "Relier deux appareils…", self)
+                                   tr("Relier deux appareils…"), self)
         self.act_connect.setShortcut("Ctrl+L")
         self.act_connect.triggered.connect(self._connect_devices)
 
-        self.act_delete = QAction("Supprimer le device sélectionné", self)
+        self.act_delete = QAction(tr("Supprimer le device sélectionné"), self)
         self.act_delete.setShortcut(QKeySequence.Delete)
         self.act_delete.triggered.connect(self._delete_selected)
 
         self.act_fit = QAction(self._icon(st.SP_FileDialogContentsView),
-                               "Ajuster à la fenêtre", self)
+                               tr("Ajuster à la fenêtre"), self)
         self.act_fit.setShortcut("Ctrl+0")
         self.act_fit.triggered.connect(self.canvas.fit_all)
 
         self.act_zoom_in = QAction(self._icon(st.SP_ArrowUp),
-                                   "Zoom avant", self)
+                                   tr("Zoom avant"), self)
         self.act_zoom_in.setShortcut(QKeySequence.ZoomIn)
         self.act_zoom_in.triggered.connect(self.canvas.zoom_in)
 
         self.act_zoom_out = QAction(self._icon(st.SP_ArrowDown),
-                                    "Zoom arrière", self)
+                                    tr("Zoom arrière"), self)
         self.act_zoom_out.setShortcut(QKeySequence.ZoomOut)
         self.act_zoom_out.triggered.connect(self.canvas.zoom_out)
 
-        self.act_toggle_inspector = QAction("Panneau latéral", self,
+        self.act_toggle_inspector = QAction(tr("Panneau latéral"), self,
                                             checkable=True)
         self.act_toggle_inspector.setChecked(True)
         self.act_toggle_inspector.setShortcut("Ctrl+I")
         self.act_toggle_inspector.setToolTip(
-            "Masquer / réafficher le panneau d'édition à droite")
+            tr("Masquer / réafficher le panneau d'édition à droite"))
         self.act_toggle_inspector.toggled.connect(self.inspector.setVisible)
 
-        self.act_relayout = QAction("Réorganiser automatiquement", self)
+        self.act_relayout = QAction(tr("Réorganiser automatiquement"), self)
         self.act_relayout.triggered.connect(self._relayout)
 
-        self.act_device_list = QAction("Liste des devices (MAC / IP)…", self)
+        self.act_device_list = QAction(tr("Liste des devices (MAC / IP)…"),
+                                       self)
         self.act_device_list.triggered.connect(self._show_device_list)
 
-        self.act_path_report = QAction("Rapport des chemins réseau…", self)
+        self.act_path_report = QAction(tr("Rapport des chemins réseau…"), self)
         self.act_path_report.triggered.connect(self._show_path_report)
 
-        self.act_diagnose = QAction("Diagnostics réseau…", self)
+        self.act_diagnose = QAction(tr("Diagnostics réseau…"), self)
         self.act_diagnose.triggered.connect(self._show_diagnostics)
 
         # Style de routage des liaisons (exclusif).
@@ -207,9 +209,9 @@ class MainWindow(QMainWindow):
         self.routing_group.setExclusive(True)
         self.routing_actions: dict[str, QAction] = {}
         for style, label in (
-            ("ortho_h", "Angles droits — horizontal d'abord"),
-            ("ortho_v", "Angles droits — vertical d'abord"),
-            ("straight", "Lignes droites"),
+            ("ortho_h", tr("Angles droits — horizontal d'abord")),
+            ("ortho_v", tr("Angles droits — vertical d'abord")),
+            ("straight", tr("Lignes droites")),
         ):
             act = QAction(label, self, checkable=True)
             act.triggered.connect(
@@ -218,19 +220,19 @@ class MainWindow(QMainWindow):
             self.routing_actions[style] = act
         self.routing_actions["ortho_h"].setChecked(True)
 
-        self.act_reset_bends = QAction("Réinitialiser les coudes", self)
+        self.act_reset_bends = QAction(tr("Réinitialiser les coudes"), self)
         self.act_reset_bends.triggered.connect(self._reset_bends)
 
-        self.act_quit = QAction("Quitter", self)
+        self.act_quit = QAction(tr("Quitter"), self)
         self.act_quit.setShortcut(QKeySequence.Quit)
         self.act_quit.triggered.connect(self.close)
 
     def _build_menus(self) -> None:
         mb = self.menuBar()
-        m_file = mb.addMenu("&Fichier")
+        m_file = mb.addMenu(tr("&Fichier"))
         m_file.addAction(self.act_new)
         m_file.addAction(self.act_open)
-        self.menu_recent = m_file.addMenu("Récemment ouverts")
+        self.menu_recent = m_file.addMenu(tr("Récemment ouverts"))
         m_file.addAction(self.act_close)
         m_file.addSeparator()
         m_file.addAction(self.act_save)
@@ -241,7 +243,7 @@ class MainWindow(QMainWindow):
         m_file.addAction(self.act_quit)
         self._rebuild_recent_menu()
 
-        m_edit = mb.addMenu("&Édition")
+        m_edit = mb.addMenu(tr("&Édition"))
         m_edit.addAction(self.act_undo)
         m_edit.addAction(self.act_redo)
         m_edit.addSeparator()
@@ -250,13 +252,13 @@ class MainWindow(QMainWindow):
         m_edit.addAction(self.act_connect)
         m_edit.addAction(self.act_delete)
 
-        m_view = mb.addMenu("&Affichage")
+        m_view = mb.addMenu(tr("&Affichage"))
         m_view.addAction(self.act_fit)
         m_view.addAction(self.act_zoom_in)
         m_view.addAction(self.act_zoom_out)
         m_view.addAction(self.act_toggle_inspector)
         m_view.addSeparator()
-        m_routing = m_view.addMenu("Style des liaisons")
+        m_routing = m_view.addMenu(tr("Style des liaisons"))
         for style in ("ortho_h", "ortho_v", "straight"):
             m_routing.addAction(self.routing_actions[style])
         m_view.addAction(self.act_reset_bends)
@@ -279,7 +281,7 @@ class MainWindow(QMainWindow):
             m_lang.addAction(act)
 
     def _build_toolbar(self) -> None:
-        tb = self.addToolBar("Principale")
+        tb = self.addToolBar(tr("Principale"))
         tb.setMovable(False)
         tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         tb.addAction(self.act_undo)
