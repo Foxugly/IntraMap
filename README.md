@@ -1,5 +1,7 @@
 # IntraMap
 
+[![CI](https://github.com/Foxugly/IntraMap/actions/workflows/ci.yml/badge.svg)](https://github.com/Foxugly/IntraMap/actions/workflows/ci.yml)
+
 Scan a local IPv4 network, annotate the inventory with custom names and physical locations (floor / room / rack), then render the result as PlantUML and Graphviz diagrams. Optionally declare uplink wiring (switch / patch panel / PoE) to draw the cabling on the diagram.
 
 ## Installation
