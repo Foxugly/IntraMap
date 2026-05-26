@@ -10,3 +10,9 @@ output/
 inventory.yaml
 .idea/
 .vscode/
+
+# Données personnelles / locales (inventaire, mise en page, sauvegardes)
+*.layout.json
+*.bak
+*.bak-*
+exemple-cablage-2eme-etage.yaml

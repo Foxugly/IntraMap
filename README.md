@@ -39,6 +39,71 @@ intramap render --format plantuml     # just .puml
 intramap render --format graphviz     # just .dot
 ```
 
+## Graphical interface
+
+IntraMap ships a PySide6 (Qt) desktop app to draw, edit, save and export the
+network map interactively — scan, drag-and-drop nodes, edit device details,
+and export to PDF.
+
+```bash
+pip install -e ".[gui]"     # installs PySide6 alongside the core package
+intramap-gui                # opens inventory.yaml in the current directory
+intramap-gui path/to/inventory.yaml
+# or, without installing the script:
+python -m intramap.gui.app
+```
+
+What you can do in the window:
+
+- **Scanner le réseau** — runs the same nmap discovery as `intramap scan`, in a
+  background thread, and merges results into the inventory.
+- **Ajouter un device** — add a manual host (e.g. an unmanaged switch); it gets
+  a locally-administered MAC (`02:…`) and `manual: true`.
+- **Edit on the right panel** — name, IP, vendor, device type, location
+  (floor/room/rack), wired uplink (switch / ports / PoE) and Wi-Fi association.
+  Changes apply automatically — ticking a box or changing a field updates the
+  map immediately, no button to click.
+- **Doubled cable runs** — a wired uplink can be flagged as doubled (two UTP
+  cables, two patch-panel ports, a two-jack wall socket); a second patch-panel
+  port can be recorded, and the link is drawn as a double line on the map.
+- **Double-click a switch, wall outlet or patch panel** — opens a port
+  manager: declare how many ports/jacks it has and see, from the inventory's
+  uplinks, which are occupied (and by which device, PoE or not) and free.
+- **Patch panel** — the `patchpanel` device type represents the patch panel.
+  Its uplink to the switch is drawn as a heavy triple line to convey the bundle
+  of cables. Wall outlets and devices connect their uplink to the patch panel.
+- **Wall outlets** — the `outlet` device type represents an RJ45 wall socket.
+  An outlet is placed in a room, room devices connect their uplink to it, and
+  the outlet itself has a (typically doubled) uplink to the switch. The
+  outlet's jacks are numbered by their patch-panel port: when a device's
+  uplink targets an outlet, the "Port / jack" field offers those numbers.
+- **Drag-and-drop** — move nodes freely; wired/PoE/Wi-Fi edges follow. Mouse
+  wheel zooms; hold the right mouse button (or the middle button) and move the
+  mouse to pan the canvas.
+- **Grouping by floor / room** — nodes are framed by a box per `floor` and a
+  nested box per `room`; the frames resize automatically as you drag nodes.
+  Drag a floor frame by its header to move the whole floor — rooms, nodes and
+  edges — at once.
+- **Right-angle links** — edges are routed orthogonally. A global routing
+  style is set from *Affichage → Style des liaisons* (horizontal-first,
+  vertical-first, or straight). Each edge also has a draggable handle to move
+  its bend individually; double-click a handle (or *Réinitialiser les coudes*)
+  to reset it.
+- **Enregistrer** — writes everything to the single `inventory.yaml`: the
+  network data plus a top-level `layout` section holding node positions, edge
+  bends and the routing style. The `layout` section is ignored by the data
+  model and the CLI, so `intramap scan` preserves your map arrangement. Older
+  `inventory.layout.json` sidecar files are migrated into the inventory
+  automatically the first time you open and save.
+- **Exporter en PDF** — an export dialog lets you pick the page size (A4, A3,
+  A2, A1) and the layout: the whole map fitted to one page, or a multi-page
+  tiling for maximum readability. The map's proportions are always preserved.
+- **Device list** — *Affichage → Liste des devices* shows every device (name,
+  MAC address, IP) in a sortable table, and can export it to a CSV file.
+
+The GUI is a thin layer over the same core modules as the CLI; both read and
+write the same `inventory.yaml`.
+
 ## Declaring uplinks (optional)
 
 Edit a host's entry in `inventory.yaml` to add an `uplink` block describing how the device is wired:

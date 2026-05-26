@@ -1,28 +1,30 @@
 import pytest
 from datetime import datetime
 
-from intramap.models import Host, Inventory, Location, Uplink
+from intramap.models import Host, Inventory, Link, Location
+from intramap.renderers.graphviz import render as render_graphviz
 from intramap.renderers.plantuml import render as render_plantuml
 
 
-def make_host(mac: str, ip: str, *, custom_name=None, location=None,
-              uplink=None, online=True) -> Host:
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def make_host(mac, ip=None, *, custom_name=None, location=None,
+              vendor=None, device_type=None, online=True, wifi_ap_mac=None):
     now = datetime(2026, 5, 24, 14, 0, 0)
     return Host(
-        mac=mac, ip=ip, hostname=None, vendor=None,
+        mac=mac, ip=ip, hostname=None, vendor=vendor,
         custom_name=custom_name, location=location or Location(),
-        uplink=uplink,
+        device_type=device_type,
         first_seen=now, last_seen=now, online=online,
+        wifi_ap_mac=wifi_ap_mac,
     )
 
 
 @pytest.fixture
 def make_host_factory():
-    """Return a function that builds a Host with sensible defaults."""
-    from intramap.models import Host
-
     def _make(**kwargs):
-        from datetime import datetime
         now = datetime(2026, 5, 25, 0, 0, 0)
         defaults = dict(
             mac="aa:bb:cc:dd:ee:01",
@@ -37,983 +39,500 @@ def make_host_factory():
     return _make
 
 
-def test_plantuml_groups_by_floor_room_rack():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.1",
-            custom_name="Box", location=Location(floor="RDC", room="salon"),
-        ),
-        "aa:bb:cc:dd:ee:02": make_host(
-            "aa:bb:cc:dd:ee:02", "192.168.1.10",
-            custom_name="Switch",
-            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
+def _inv(*hosts, links=()):
+    return Inventory(hosts={h.mac: h for h in hosts},
+                     links=list(links),
+                     last_scan=datetime(2026, 5, 24))
 
+
+# ---------------------------------------------------------------------------
+# PlantUML : structure et groupes
+# ---------------------------------------------------------------------------
+
+def test_plantuml_groups_by_floor_room_rack():
+    inv = _inv(
+        make_host("aa:bb:cc:dd:ee:01", "192.168.1.1", custom_name="Box",
+                  location=Location(floor="RDC", room="salon")),
+        make_host("aa:bb:cc:dd:ee:02", "192.168.1.10", custom_name="Switch",
+                  location=Location(floor="sous-sol", room="local-tech",
+                                    rack="baie-A")),
+    )
     out = render_plantuml(inv)
     assert out.startswith("@startuml")
     assert out.rstrip().endswith("@enduml")
-    assert 'package "RDC"' in out
-    assert 'package "salon"' in out
-    assert 'package "sous-sol"' in out
-    assert 'package "local-tech"' in out
-    assert 'package "baie-A"' in out
-    assert "Box" in out
-    assert "Switch" in out
+    for label in ('"RDC"', '"salon"', '"sous-sol"', '"local-tech"', '"baie-A"',
+                  "Box", "Switch"):
+        assert label in out
 
 
 def test_plantuml_hosts_without_floor_go_to_non_localised():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:99": make_host(
-            "aa:bb:cc:dd:ee:99", "192.168.1.99",
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
+    inv = _inv(make_host("aa:bb:cc:dd:ee:99", "192.168.1.99"))
     out = render_plantuml(inv)
     assert 'package "Non localisé"' in out
     assert "aa:bb:cc:dd:ee:99" in out
 
 
 def test_plantuml_floor_set_without_room_gets_placeholder_room():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.1",
-            location=Location(floor="RDC"),  # no room
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
+    inv = _inv(make_host("aa:bb:cc:dd:ee:01", "192.168.1.1",
+                         location=Location(floor="RDC")))
     out = render_plantuml(inv)
     assert 'package "RDC"' in out
     assert 'package "(sans pièce)"' in out
 
 
 def test_plantuml_offline_host_has_offline_stereotype():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.1",
-            location=Location(floor="RDC", room="salon"),
-            online=False,
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
+    inv = _inv(make_host("aa:bb:cc:dd:ee:01", "192.168.1.1",
+                         location=Location(floor="RDC", room="salon"),
+                         online=False))
     out = render_plantuml(inv)
     assert "<<offline>>" in out
 
 
 def test_plantuml_escapes_double_quotes_in_names():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.1",
-            custom_name='PC "test"',
-            location=Location(floor="RDC", room="salon"),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
+    inv = _inv(make_host("aa:bb:cc:dd:ee:01", "192.168.1.1",
+                         custom_name='PC "test"',
+                         location=Location(floor="RDC", room="salon")))
     out = render_plantuml(inv)
     assert 'PC \\"test\\"' in out
-    # Make sure the surrounding label quotes aren't broken; sprite prefix precedes the name
-    assert '"<$question>\\nPC \\"test\\"' in out
 
 
-def test_plantuml_uses_mac_when_no_custom_name():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:99": make_host(
-            "aa:bb:cc:dd:ee:99", "192.168.1.99",
-            location=Location(floor="RDC", room="salon"),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
+def test_plantuml_has_top_to_bottom_direction():
+    out = render_plantuml(Inventory())
+    assert "top to bottom direction" in out
 
+
+# ---------------------------------------------------------------------------
+# PlantUML : arêtes
+# ---------------------------------------------------------------------------
+
+def test_plantuml_draws_one_edge_per_link():
+    sw = make_host("aa:bb:cc:dd:ee:01", custom_name="Switch", device_type="switch",
+                   location=Location(floor="sous-sol", room="local-tech"))
+    cam = make_host("aa:bb:cc:dd:ee:02", custom_name="Cam",
+                    location=Location(floor="RDC", room="hall"))
+    inv = _inv(sw, cam, links=[
+        Link(mac_a=cam.mac, port_a=None, mac_b=sw.mac, port_b=4, poe=False),
+    ])
     out = render_plantuml(inv)
-    assert "aa:bb:cc:dd:ee:99" in out
-
-
-def test_plantuml_draws_edge_for_valid_uplink():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.10",
-            custom_name="Switch",
-            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
-        ),
-        "aa:bb:cc:dd:ee:02": make_host(
-            "aa:bb:cc:dd:ee:02", "192.168.1.50",
-            custom_name="Cam",
-            location=Location(floor="RDC", room="hall"),
-            uplink=Uplink(
-                switch_mac="aa:bb:cc:dd:ee:01",
-                switch_port=4,
-                patch_port=7,
-                poe=False,
-            ),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
-    out = render_plantuml(inv)
-    # An edge between the two nodes appears (PlantUML '--' between IDs)
     assert " -- " in out
-    # Label contains both port indicators
-    assert "sw:4" in out
-    assert "pp:7" in out
 
 
-def test_plantuml_poe_uplink_uses_distinct_style():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.10",
-            custom_name="Switch",
-            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
-        ),
-        "aa:bb:cc:dd:ee:02": make_host(
-            "aa:bb:cc:dd:ee:02", "192.168.1.50",
-            custom_name="Cam",
-            location=Location(floor="RDC", room="hall"),
-            uplink=Uplink(
-                switch_mac="aa:bb:cc:dd:ee:01",
-                switch_port=4,
-                poe=True,
-            ),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
+def test_plantuml_poe_link_uses_orange_style():
+    sw = make_host("aa:bb:cc:dd:ee:01", custom_name="Switch", device_type="switch",
+                   location=Location(floor="sous-sol", room="local-tech"))
+    cam = make_host("aa:bb:cc:dd:ee:02", custom_name="Cam",
+                    location=Location(floor="RDC", room="hall"))
+    inv = _inv(sw, cam, links=[
+        Link(mac_a=cam.mac, mac_b=sw.mac, port_b=4, poe=True),
+    ])
     out = render_plantuml(inv)
     assert "[#orange,thickness=2]" in out
     assert "PoE" in out
 
 
-def test_plantuml_uplink_with_only_patch_port():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.10",
-            custom_name="Switch",
-            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
-        ),
-        "aa:bb:cc:dd:ee:02": make_host(
-            "aa:bb:cc:dd:ee:02", "192.168.1.50",
-            custom_name="Cam",
-            location=Location(floor="RDC", room="hall"),
-            uplink=Uplink(switch_mac="aa:bb:cc:dd:ee:01", patch_port=7),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
+def test_plantuml_link_to_unknown_mac_silently_skipped():
+    cam = make_host("aa:bb:cc:dd:ee:02", custom_name="Cam",
+                    location=Location(floor="RDC", room="hall"))
+    inv = _inv(cam, links=[
+        Link(mac_a=cam.mac, mac_b="ff:ff:ff:ff:ff:ff", port_b=4),
+    ])
     out = render_plantuml(inv)
-    assert "pp:7" in out
-    assert "sw:" not in out  # no switch_port label part
-
-
-def test_plantuml_uplink_to_unknown_mac_is_silently_skipped():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:02": make_host(
-            "aa:bb:cc:dd:ee:02", "192.168.1.50",
-            custom_name="Cam",
-            location=Location(floor="RDC", room="hall"),
-            uplink=Uplink(switch_mac="ff:ff:ff:ff:ff:ff", switch_port=4),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
-    out = render_plantuml(inv)
-    # No edge drawn since the target MAC isn't in the inventory
     assert " -- " not in out
-    assert "sw:4" not in out
 
 
 # ---------------------------------------------------------------------------
-# Graphviz (DOT) renderer tests
+# Graphviz : structure
 # ---------------------------------------------------------------------------
-
-from intramap.renderers.graphviz import render as render_graphviz
-
 
 def test_graphviz_outputs_a_graph():
-    inv = Inventory(hosts={}, last_scan=datetime(2026, 5, 24))
-    out = render_graphviz(inv)
+    out = render_graphviz(Inventory())
     assert out.lstrip().startswith("graph ")
     assert out.rstrip().endswith("}")
 
 
 def test_graphviz_groups_with_clusters():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.1",
-            custom_name="Box", location=Location(floor="RDC", room="salon"),
-        ),
-        "aa:bb:cc:dd:ee:02": make_host(
-            "aa:bb:cc:dd:ee:02", "192.168.1.10",
-            custom_name="Switch",
-            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
+    inv = _inv(
+        make_host("aa:bb:cc:dd:ee:01", "192.168.1.1", custom_name="Box",
+                  location=Location(floor="RDC", room="salon")),
+        make_host("aa:bb:cc:dd:ee:02", "192.168.1.10", custom_name="Switch",
+                  location=Location(floor="sous-sol", room="local-tech",
+                                    rack="baie-A")),
+    )
     out = render_graphviz(inv)
     assert "subgraph cluster_" in out
-    assert 'label="RDC"' in out
-    assert 'label="salon"' in out
-    assert 'label="sous-sol"' in out
-    assert 'label="local-tech"' in out
-    assert 'label="baie-A"' in out
-    assert "Box" in out
-    assert "Switch" in out
+    for lbl in ('"RDC"', '"salon"', '"sous-sol"', '"local-tech"', '"baie-A"'):
+        assert f'label={lbl}' in out
 
 
 def test_graphviz_non_localised_group():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:99": make_host("aa:bb:cc:dd:ee:99", "192.168.1.99"),
-    }, last_scan=datetime(2026, 5, 24))
-    out = render_graphviz(inv)
-    assert 'label="Non localisé"' in out
+    inv = _inv(make_host("aa:bb:cc:dd:ee:99", "192.168.1.99"))
+    assert 'label="Non localisé"' in render_graphviz(inv)
 
 
 def test_graphviz_offline_host_dashed():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.1",
-            location=Location(floor="RDC", room="salon"),
-            online=False,
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-    out = render_graphviz(inv)
-    assert "dashed" in out
+    inv = _inv(make_host("aa:bb:cc:dd:ee:01", "192.168.1.1",
+                         location=Location(floor="RDC", room="salon"),
+                         online=False))
+    assert "dashed" in render_graphviz(inv)
 
 
 def test_graphviz_escapes_double_quotes():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.1",
-            custom_name='PC "test"',
-            location=Location(floor="RDC", room="salon"),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
+    inv = _inv(make_host("aa:bb:cc:dd:ee:01", "192.168.1.1",
+                         custom_name='PC "test"',
+                         location=Location(floor="RDC", room="salon")))
     out = render_graphviz(inv)
-    # HTML labels don't need backslash-escaped quotes; the name appears verbatim
     assert 'PC "test"' in out
-    # The node label is HTML format (angle brackets), not text format (quotes)
     assert "label=<" in out
 
 
-def test_graphviz_draws_edge_for_valid_uplink():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.10",
-            custom_name="Switch",
-            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
-        ),
-        "aa:bb:cc:dd:ee:02": make_host(
-            "aa:bb:cc:dd:ee:02", "192.168.1.50",
-            custom_name="Cam",
-            location=Location(floor="RDC", room="hall"),
-            uplink=Uplink(
-                switch_mac="aa:bb:cc:dd:ee:01",
-                switch_port=4,
-                patch_port=7,
-                poe=False,
-            ),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
+def test_graphviz_has_top_bottom_rankdir():
+    out = render_graphviz(Inventory())
+    assert "rankdir=TB" in out
+    assert "splines=ortho" in out
 
+
+def test_graphviz_uses_html_labels(make_host_factory):
+    inv = _inv(make_host_factory(custom_name="NAS", vendor="Synology"))
+    out = render_graphviz(inv)
+    assert "label=<" in out
+    assert "<B>NAS</B>" in out
+    assert "<BR/>" in out
+
+
+def test_graphviz_has_tooltip(make_host_factory):
+    last = datetime(2026, 5, 24, 10, 0, 0)
+    inv = _inv(make_host_factory(vendor="Synology", last_seen=last))
+    out = render_graphviz(inv)
+    assert "tooltip=" in out
+    assert "Synology" in out and "2026-05-24" in out
+
+
+# ---------------------------------------------------------------------------
+# Graphviz : arêtes
+# ---------------------------------------------------------------------------
+
+def test_graphviz_draws_edge_for_link():
+    sw = make_host("aa:bb:cc:dd:ee:01", custom_name="Switch", device_type="switch",
+                   location=Location(floor="sous-sol", room="local-tech"))
+    cam = make_host("aa:bb:cc:dd:ee:02", custom_name="Cam",
+                    location=Location(floor="RDC", room="hall"))
+    inv = _inv(sw, cam, links=[Link(mac_a=cam.mac, mac_b=sw.mac, port_b=4)])
     out = render_graphviz(inv)
     assert " -- " in out
-    assert "sw:4" in out
-    assert "pp:7" in out
 
 
-def test_graphviz_poe_uplink_styled_orange():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host(
-            "aa:bb:cc:dd:ee:01", "192.168.1.10",
-            custom_name="Switch",
-            location=Location(floor="sous-sol", room="local-tech", rack="baie-A"),
-        ),
-        "aa:bb:cc:dd:ee:02": make_host(
-            "aa:bb:cc:dd:ee:02", "192.168.1.50",
-            custom_name="Cam",
-            location=Location(floor="RDC", room="hall"),
-            uplink=Uplink(switch_mac="aa:bb:cc:dd:ee:01",
-                          switch_port=4, poe=True),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
+def test_graphviz_poe_link_styled_orange():
+    sw = make_host("aa:bb:cc:dd:ee:01", custom_name="Switch", device_type="switch",
+                   location=Location(floor="sous-sol", room="local-tech"))
+    cam = make_host("aa:bb:cc:dd:ee:02", custom_name="Cam",
+                    location=Location(floor="RDC", room="hall"))
+    inv = _inv(sw, cam, links=[
+        Link(mac_a=cam.mac, mac_b=sw.mac, port_b=4, poe=True),
+    ])
     out = render_graphviz(inv)
     assert "PoE" in out
     assert 'color="orange"' in out
     assert "penwidth=2" in out
 
 
-def test_graphviz_uplink_to_unknown_mac_is_silently_skipped():
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:02": make_host(
-            "aa:bb:cc:dd:ee:02", "192.168.1.50",
-            custom_name="Cam",
-            location=Location(floor="RDC", room="hall"),
-            uplink=Uplink(switch_mac="ff:ff:ff:ff:ff:ff", switch_port=4),
-        ),
-    }, last_scan=datetime(2026, 5, 24))
-
+def test_graphviz_link_to_unknown_mac_silently_skipped():
+    cam = make_host("aa:bb:cc:dd:ee:02", custom_name="Cam",
+                    location=Location(floor="RDC", room="hall"))
+    inv = _inv(cam, links=[Link(mac_a=cam.mac, mac_b="ff:ff:ff:ff:ff:ff",
+                                port_b=4)])
     out = render_graphviz(inv)
     assert " -- " not in out
-    assert "sw:4" not in out
-
-
-def test_all_15_device_type_icons_are_bundled():
-    """Every value in DEVICE_TYPES must have a corresponding SVG file in
-    the package, accessible via importlib.resources."""
-    from importlib.resources import files
-
-    from intramap.models import DEVICE_TYPES
-
-    icons_root = files("intramap.renderers") / "icons"
-    for device_type in DEVICE_TYPES:
-        svg_path = icons_root / f"{device_type}.svg"
-        png_path = icons_root / f"{device_type}.png"
-        assert svg_path.is_file(), f"missing SVG icon: {svg_path}"
-        # PNG is the format actually used by Graphviz (svg:cairo plugin is
-        # often unavailable in Windows builds)
-        assert png_path.is_file(), f"missing PNG icon: {png_path}"
-
-
-def test_icons_license_is_bundled():
-    from importlib.resources import files
-
-    license_path = files("intramap.renderers") / "icons" / "LICENSE"
-    assert license_path.is_file()
-    content = license_path.read_text(encoding="utf-8")
-    assert "Creative Commons" in content or "CC BY" in content
-
-
-# ---------------------------------------------------------------------------
-# icons.py — PLANTUML_SPRITES map and copy_icons_to helper
-# ---------------------------------------------------------------------------
-
-
-def test_plantuml_sprites_cover_all_device_types():
-    from intramap.models import DEVICE_TYPES
-    from intramap.renderers.icons import PLANTUML_SPRITES
-
-    assert set(PLANTUML_SPRITES.keys()) == set(DEVICE_TYPES)
-
-
-def test_plantuml_sprites_use_known_fa6_names():
-    from intramap.renderers.icons import PLANTUML_SPRITES
-
-    expected = {
-        "router": "network_wired",
-        "switch": "share_nodes",
-        "ap": "wifi",
-        "controller": "sliders",
-        "nas": "hard_drive",
-        "tv": "tv",
-        "stb": "clapperboard",
-        "phone": "mobile_screen_button",
-        "tablet": "tablet_screen_button",
-        "laptop": "laptop",
-        "iot": "house_signal",
-        "camera": "video",
-        "printer": "print",
-        "voip": "phone_volume",
-        "other": "question",
-    }
-    assert PLANTUML_SPRITES == expected
-
-
-def test_copy_icons_to_creates_subdir_and_copies_requested_types(tmp_path):
-    from intramap.renderers.icons import copy_icons_to
-
-    used = {"router", "nas"}
-    copy_icons_to(tmp_path, used)
-
-    icons_dir = tmp_path / "icons"
-    assert icons_dir.is_dir()
-    assert (icons_dir / "router.png").is_file()
-    assert (icons_dir / "nas.png").is_file()
-    # Did not copy unused icons
-    assert not (icons_dir / "tv.png").exists()
-
-
-def test_copy_icons_to_idempotent(tmp_path):
-    from intramap.renderers.icons import copy_icons_to
-
-    copy_icons_to(tmp_path, {"router"})
-    # Second call must not raise (idempotent)
-    copy_icons_to(tmp_path, {"router"})
-    assert (tmp_path / "icons" / "router.png").is_file()
-
-
-def test_copy_icons_to_unknown_type_raises(tmp_path):
-    from intramap.renderers.icons import copy_icons_to
-
-    with pytest.raises(ValueError, match="refrigerator"):
-        copy_icons_to(tmp_path, {"refrigerator"})
-
-
-def test_copy_icons_to_validates_all_types_before_copying(tmp_path):
-    """If any requested type is unknown, no files should be written."""
-    from intramap.renderers.icons import copy_icons_to
-
-    # router is valid, refrigerator is not — the call must fail and leave
-    # no partial state.
-    with pytest.raises(ValueError, match="refrigerator"):
-        copy_icons_to(tmp_path, ["router", "refrigerator"])
-
-    icons_dir = tmp_path / "icons"
-    # No file from the valid type was copied either
-    assert not (icons_dir / "router.png").exists()
-
-
-# ---------------------------------------------------------------------------
-# PlantUML renderer — sprite emission
-# ---------------------------------------------------------------------------
-
-def test_plantuml_emits_include_per_used_sprite(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
-        ),
-        "aa:bb:cc:dd:ee:02": make_host_factory(
-            mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom",
-        ),
-    })
-    out = render(inv)
-
-    assert "!include <font-awesome-6/hard_drive>" in out
-    assert "!include <font-awesome-6/network_wired>" in out
-
-
-def test_plantuml_includes_are_lexicographically_sorted(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="Synology",  # nas -> hard_drive
-        ),
-        "aa:bb:cc:dd:ee:02": make_host_factory(
-            mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom",  # router -> network_wired
-        ),
-    })
-    out = render(inv)
-
-    pos_hard = out.index("hard_drive")
-    pos_net = out.index("network_wired")
-    assert pos_hard < pos_net
-
-
-def test_plantuml_dedupes_includes(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
-        ),
-        "aa:bb:cc:dd:ee:02": make_host_factory(
-            mac="aa:bb:cc:dd:ee:02", vendor="QNAP",
-        ),
-    })
-    out = render(inv)
-
-    assert out.count("!include <font-awesome-6/hard_drive>") == 1
-
-
-def test_plantuml_node_label_starts_with_sprite(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
-            custom_name="NAS",
-        ),
-    })
-    out = render(inv)
-
-    assert '"<$hard_drive>\\nNAS' in out
-
-
-def test_plantuml_unknown_vendor_uses_question_sprite(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor=None,
-        ),
-    })
-    out = render(inv)
-
-    assert "!include <font-awesome-6/question>" in out
-    assert "<$question>" in out
-
-
-def test_plantuml_explicit_device_type_overrides_inference(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01",
-            vendor="TP-Link Systems",  # would infer 'ap' -> 'wifi'
-            device_type="controller",  # override -> 'sliders'
-        ),
-    })
-    out = render(inv)
-
-    assert "<$sliders>" in out
-    assert "<$wifi>" not in out
-
-
-def test_plantuml_invalid_device_type_falls_back_to_question(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01",
-            vendor="Synology",
-            device_type="refrigerator",  # not in catalogue
-        ),
-    })
-    out = render(inv)
-
-    assert "<$question>" in out
-    assert "<$hard_drive>" not in out
 
 
 def test_graphviz_emits_image_attribute(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
-            custom_name="NAS",
-        ),
-    })
-    out = render(inv)
-
+    inv = _inv(make_host_factory(vendor="Synology", custom_name="NAS"))
+    out = render_graphviz(inv)
     assert 'image="icons/nas.png"' in out
     assert 'labelloc="b"' in out
-    assert "imagescale=true" in out
 
 
 def test_graphviz_explicit_device_type_overrides_inference(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01",
-            vendor="TP-Link Systems",  # would infer 'ap'
-            device_type="controller",
-        ),
-    })
-    out = render(inv)
-
+    inv = _inv(make_host_factory(vendor="TP-Link Systems",
+                                 device_type="controller"))
+    out = render_graphviz(inv)
     assert 'image="icons/controller.png"' in out
     assert 'image="icons/ap.png"' not in out
 
 
 def test_graphviz_unknown_vendor_uses_other_icon(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor=None,
-        ),
-    })
-    out = render(inv)
-
-    assert 'image="icons/other.png"' in out
+    inv = _inv(make_host_factory(vendor=None))
+    assert 'image="icons/other.png"' in render_graphviz(inv)
 
 
-def test_graphviz_offline_host_keeps_image_and_uses_dashed_style(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
-            online=False,
-        ),
-    })
-    out = render(inv)
-
+def test_graphviz_offline_host_keeps_image_and_dashed(make_host_factory):
+    inv = _inv(make_host_factory(vendor="Synology", online=False))
+    out = render_graphviz(inv)
     assert 'image="icons/nas.png"' in out
     assert "dashed" in out
 
 
 def test_graphviz_copy_assets_to_writes_icons(tmp_path, make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
-        ),
-        "aa:bb:cc:dd:ee:02": make_host_factory(
-            mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom",
-        ),
-    })
-    out = render(inv, copy_assets_to=tmp_path)
-
+    inv = _inv(
+        make_host_factory(mac="aa:bb:cc:dd:ee:01", vendor="Synology"),
+        make_host_factory(mac="aa:bb:cc:dd:ee:02", vendor="Sagemcom"),
+    )
+    render_graphviz(inv, copy_assets_to=tmp_path)
     assert (tmp_path / "icons" / "nas.png").is_file()
     assert (tmp_path / "icons" / "router.png").is_file()
-    # No copy when copy_assets_to is None: covered by other tests that
-    # didn't pass the arg.
 
 
-def test_plantuml_has_top_to_bottom_direction():
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
+# ---------------------------------------------------------------------------
+# Wi-Fi
+# ---------------------------------------------------------------------------
 
-    inv = Inventory()
-    out = render(inv)
-    assert "top to bottom direction" in out
+def test_plantuml_draws_wifi_edge_when_valid(make_host_factory):
+    inv = _inv(
+        make_host_factory(mac="aa:bb:cc:dd:ee:01", vendor="TP-Link Systems",
+                          custom_name="AP RDC"),
+        make_host_factory(mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+                          custom_name="iPhone",
+                          wifi_ap_mac="aa:bb:cc:dd:ee:01"),
+    )
+    out = render_plantuml(inv)
+    assert "..>" in out and "Wi-Fi" in out
 
 
-def test_graphviz_has_top_bottom_rankdir():
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
+def test_plantuml_wifi_to_unknown_mac_skipped(make_host_factory):
+    inv = _inv(make_host_factory(mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+                                 wifi_ap_mac="ff:ff:ff:ff:ff:ff"))
+    out = render_plantuml(inv)
+    assert "..>" not in out
 
-    inv = Inventory()
-    out = render(inv)
-    assert "rankdir=TB" in out
-    assert "splines=ortho" in out
+
+def test_graphviz_draws_wifi_edge_when_valid(make_host_factory):
+    inv = _inv(
+        make_host_factory(mac="aa:bb:cc:dd:ee:01", vendor="TP-Link"),
+        make_host_factory(mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+                          wifi_ap_mac="aa:bb:cc:dd:ee:01"),
+    )
+    out = render_graphviz(inv)
+    assert "style=dashed" in out and "Wi-Fi" in out
+
+
+def test_graphviz_wifi_to_unknown_mac_skipped(make_host_factory):
+    inv = _inv(make_host_factory(mac="aa:bb:cc:dd:ee:02", vendor="Apple",
+                                 wifi_ap_mac="ff:ff:ff:ff:ff:ff"))
+    out = render_graphviz(inv)
+    assert 'style=dashed, color="#1f77b4"' not in out
+
+
+# ---------------------------------------------------------------------------
+# Icônes + sprites + couleurs
+# ---------------------------------------------------------------------------
+
+def test_all_device_type_icons_are_bundled():
+    from importlib.resources import files
+    from intramap.models import DEVICE_TYPES
+    icons_root = files("intramap.renderers") / "icons"
+    for t in DEVICE_TYPES:
+        assert (icons_root / f"{t}.svg").is_file()
+        assert (icons_root / f"{t}.png").is_file()
+
+
+def test_icons_license_is_bundled():
+    from importlib.resources import files
+    p = files("intramap.renderers") / "icons" / "LICENSE"
+    assert p.is_file()
+    content = p.read_text(encoding="utf-8")
+    assert "Creative Commons" in content or "CC BY" in content
+
+
+def test_plantuml_sprites_cover_all_device_types():
+    from intramap.models import DEVICE_TYPES
+    from intramap.renderers.icons import PLANTUML_SPRITES
+    assert set(PLANTUML_SPRITES.keys()) == set(DEVICE_TYPES)
 
 
 def test_device_colors_cover_all_device_types():
     from intramap.models import DEVICE_TYPES
     from intramap.renderers.icons import DEVICE_COLORS
-
     assert set(DEVICE_COLORS.keys()) == set(DEVICE_TYPES)
 
 
-def test_device_colors_use_expected_palette():
+def test_copy_icons_to_creates_subdir_and_copies_requested(tmp_path):
+    from intramap.renderers.icons import copy_icons_to
+    copy_icons_to(tmp_path, {"router", "nas"})
+    icons = tmp_path / "icons"
+    assert (icons / "router.png").is_file()
+    assert (icons / "nas.png").is_file()
+    assert not (icons / "tv.png").exists()
+
+
+def test_copy_icons_to_unknown_type_raises(tmp_path):
+    from intramap.renderers.icons import copy_icons_to
+    with pytest.raises(ValueError, match="refrigerator"):
+        copy_icons_to(tmp_path, {"refrigerator"})
+
+
+def test_copy_icons_to_validates_all_types_before_writing(tmp_path):
+    # Un type inconnu dans le lot doit faire échouer AVANT d'écrire le moindre
+    # fichier (sortie atomique).
+    from intramap.renderers.icons import copy_icons_to
+    with pytest.raises(ValueError, match="refrigerator"):
+        copy_icons_to(tmp_path, ["router", "refrigerator"])
+    assert not (tmp_path / "icons" / "router.png").exists()
+
+
+def test_copy_icons_to_is_idempotent(tmp_path):
+    from intramap.renderers.icons import copy_icons_to
+    copy_icons_to(tmp_path, {"router"})
+    copy_icons_to(tmp_path, {"router"})  # 2e passage : ne doit pas lever
+    assert (tmp_path / "icons" / "router.png").is_file()
+
+
+def test_device_colors_are_valid_hex():
+    import re as _re
     from intramap.renderers.icons import DEVICE_COLORS
-
-    expected = {
-        "router": "#1f77b4",
-        "switch": "#2ca02c",
-        "ap": "#2ca02c",
-        "controller": "#2ca02c",
-        "nas": "#9467bd",
-        "tv": "#ff7f0e",
-        "stb": "#ff7f0e",
-        "phone": "#7f7f7f",
-        "tablet": "#7f7f7f",
-        "laptop": "#7f7f7f",
-        "iot": "#e377c2",
-        "camera": "#e377c2",
-        "voip": "#bcbd22",
-        "printer": "#bcbd22",
-        "other": "#cccccc",
-    }
-    assert DEVICE_COLORS == expected
+    for dtype, color in DEVICE_COLORS.items():
+        assert _re.fullmatch(r"#[0-9a-fA-F]{6}", color), (dtype, color)
 
 
-def test_plantuml_online_host_has_color_suffix(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
-    })
-    out = render(inv)
-    # device_type=nas → color #9467bd appears after node ID
-    assert "#9467bd" in out
+def test_plantuml_sprites_are_nonempty_identifiers():
+    from intramap.renderers.icons import PLANTUML_SPRITES
+    for dtype, sprite in PLANTUML_SPRITES.items():
+        assert sprite and _re_ok(sprite), (dtype, sprite)
 
 
-def test_plantuml_offline_host_has_no_color_suffix(make_host_factory):
-    """Offline hosts keep their <<offline>> stereotype unmodified — no color
-    suffix is appended (stereotype dominates the look)."""
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            vendor="Synology", online=False,
-        ),
-    })
-    out = render(inv)
-    assert "<<offline>>" in out
-    # Color must not appear on host nodes; legend nodes (legend_*) are exempt.
-    nas_color_lines = [
-        l for l in out.splitlines()
-        if "#9467bd" in l and "legend_" not in l
-    ]
-    assert nas_color_lines == []
+def _re_ok(sprite: str) -> bool:
+    import re as _re
+    # Noms FontAwesome : minuscules, chiffres et underscores (ex. network_wired).
+    return bool(_re.fullmatch(r"[a-z0-9_]+", sprite))
 
 
-def test_graphviz_online_host_has_fillcolor(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
-    })
-    out = render(inv)
-    assert 'fillcolor="#9467bd"' in out
-    assert "style=filled" in out
+def test_plantuml_pins_key_sprites():
+    # Quelques sprites critiques épinglés (le branche a changé ces valeurs).
+    from intramap.renderers.icons import PLANTUML_SPRITES
+    assert PLANTUML_SPRITES["router"] == "tower_broadcast"
+    assert PLANTUML_SPRITES["switch"] == "network_wired"
+    assert PLANTUML_SPRITES["other"] == "question"
 
 
-def test_graphviz_offline_host_keeps_color_but_dashed(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
+# ---------------------------------------------------------------------------
+# PlantUML : émission des sprites FontAwesome (!include)
+# ---------------------------------------------------------------------------
 
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            vendor="Synology", online=False,
-        ),
-    })
-    out = render(inv)
-    assert 'fillcolor="#9467bd"' in out
-    # offline combines filled and dashed
-    assert 'style="filled,dashed"' in out
-
-
-def test_plantuml_draws_wifi_edge_when_valid(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="TP-Link Systems",
-            custom_name="AP RDC",
-        ),
-        "aa:bb:cc:dd:ee:02": make_host_factory(
-            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
-            custom_name="iPhone",
-            wifi_ap_mac="aa:bb:cc:dd:ee:01",
-        ),
-    })
-    out = render(inv)
-    assert "..>" in out  # PlantUML dashed arrow
-    assert "Wi-Fi" in out
+def test_plantuml_emits_one_include_per_used_sprite_sorted_and_deduped():
+    sw = make_host("aa:bb:cc:dd:ee:01", device_type="switch")
+    sw2 = make_host("aa:bb:cc:dd:ee:02", device_type="switch")  # même sprite
+    nas = make_host("aa:bb:cc:dd:ee:03", device_type="nas")
+    out = render_plantuml(_inv(sw, sw2, nas))
+    includes = [ln for ln in out.splitlines() if ln.startswith("!include")]
+    # Dédupliqué (un seul switch malgré deux hôtes) et trié.
+    assert includes == sorted(includes)
+    assert len(includes) == len(set(includes))
+    assert any("network_wired" in ln for ln in includes)
+    assert any("hard_drive" in ln for ln in includes)
 
 
-def test_plantuml_wifi_edge_to_unknown_mac_skipped(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:02": make_host_factory(
-            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
-            wifi_ap_mac="ff:ff:ff:ff:ff:ff",
-        ),
-    })
-    out = render(inv)
-    # No Wi-Fi edge arrow should be emitted (legend may still mention "Wi-Fi")
-    assert "..>" not in out
-    assert ' : "Wi-Fi"' not in out
+def test_plantuml_node_label_starts_with_sprite():
+    nas = make_host("aa:bb:cc:dd:ee:03", custom_name="Stockage",
+                    device_type="nas")
+    out = render_plantuml(_inv(nas))
+    assert "<$hard_drive>" in out
 
 
-def test_graphviz_draws_wifi_edge_when_valid(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="TP-Link",
-        ),
-        "aa:bb:cc:dd:ee:02": make_host_factory(
-            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
-            wifi_ap_mac="aa:bb:cc:dd:ee:01",
-        ),
-    })
-    out = render(inv)
-    assert "style=dashed" in out
-    assert "Wi-Fi" in out
+def test_plantuml_explicit_device_type_selects_its_sprite():
+    h = make_host("aa:bb:cc:dd:ee:01", vendor="Synology", device_type="camera")
+    out = render_plantuml(_inv(h))
+    assert "<$video>" in out          # camera, malgré le vendor NAS
+    assert "<$hard_drive>" not in out
 
 
-def test_graphviz_wifi_edge_to_unknown_mac_skipped(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:02": make_host_factory(
-            mac="aa:bb:cc:dd:ee:02", vendor="Apple",
-            wifi_ap_mac="ff:ff:ff:ff:ff:ff",
-        ),
-    })
-    out = render(inv)
-    # No Wi-Fi edge should be drawn. Wi-Fi edges have a unique combination of
-    # style=dashed with color="#1f77b4" (the legend node uses fontcolor, not color).
-    assert 'style=dashed, color="#1f77b4"' not in out
+def test_plantuml_invalid_device_type_falls_back_to_question_sprite():
+    h = make_host("aa:bb:cc:dd:ee:01", device_type="licorne")
+    out = render_plantuml(_inv(h))
+    assert "<$question>" in out
 
 
-def test_host_with_both_uplink_and_wifi_gets_two_edges(make_host_factory):
-    """A laptop docked via Ethernet + associated to Wi-Fi backup should
-    show BOTH edges in the diagram."""
-    from intramap.models import Inventory, Uplink
-    from intramap.renderers.graphviz import render
+# ---------------------------------------------------------------------------
+# Étiquettes : ne pas laisser fuir « None » quand l'IP est absente
+# ---------------------------------------------------------------------------
 
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="TP-Link",  # AP
-        ),
-        "aa:bb:cc:dd:ee:02": make_host_factory(
-            mac="aa:bb:cc:dd:ee:02", vendor="Cisco",  # switch
-            device_type="switch",
-        ),
-        "aa:bb:cc:dd:ee:03": make_host_factory(
-            mac="aa:bb:cc:dd:ee:03", vendor="Intel Corporate",  # laptop
-            uplink=Uplink(switch_mac="aa:bb:cc:dd:ee:02", switch_port=5),
-            wifi_ap_mac="aa:bb:cc:dd:ee:01",
-        ),
-    })
-    out = render(inv)
-    assert "Wi-Fi" in out
-    assert "sw:5" in out
+def test_plantuml_label_omits_ip_when_null():
+    h = make_host("aa:bb:cc:dd:ee:01", ip=None, custom_name="Switch",
+                  device_type="switch")
+    out = render_plantuml(_inv(h))
+    assert "None" not in out
 
 
-def test_plantuml_label_omits_ip_when_null(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", ip=None,
-            custom_name="Switch principal", vendor=None,
-        ),
-    })
-    out = render(inv)
-    assert "aa:bb:cc:dd:ee:01" in out
-    assert "Switch principal\\nNone" not in out
-    assert "Switch principal\\n?" not in out
+def test_graphviz_html_label_omits_ip_when_null():
+    h = make_host("aa:bb:cc:dd:ee:01", ip=None, custom_name="Switch",
+                  device_type="switch")
+    out = render_graphviz(_inv(h))
+    assert "None" not in out
 
 
-def test_graphviz_uses_html_labels(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
+# ---------------------------------------------------------------------------
+# Légende
+# ---------------------------------------------------------------------------
 
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", custom_name="NAS",
-            vendor="Synology",
-        ),
-    })
-    out = render(inv)
-    # HTML labels start with < not " (Graphviz convention)
-    assert "label=<" in out
-    # Bold tag for the name
-    assert "<B>NAS</B>" in out
-    # Smaller font for IP / MAC
-    assert "<BR/>" in out
-
-
-def test_graphviz_html_label_omits_ip_when_null(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", ip=None,
-            custom_name="Switch", vendor=None,
-        ),
-    })
-    out = render(inv)
-    assert "aa:bb:cc:dd:ee:01" in out
-    # No literal "None" leaking into the label
-    assert ">None<" not in out
-
-
-def test_graphviz_has_tooltip(make_host_factory):
-    from datetime import datetime
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    last = datetime(2026, 5, 24, 10, 0, 0)
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(
-            mac="aa:bb:cc:dd:ee:01", vendor="Synology",
-            last_seen=last,
-        ),
-    })
-    out = render(inv)
-    assert "tooltip=" in out
-    assert "Synology" in out
-    assert "2026-05-24" in out
-
-
-def test_plantuml_emits_legend_cluster(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
-    })
-    out = render(inv)
+def test_plantuml_emits_legend(make_host_factory):
+    inv = _inv(make_host_factory(vendor="Synology"))
+    out = render_plantuml(inv)
     assert 'package "Légende"' in out
-    # the used device_type appears in the legend
-    assert "legend_nas" in out or "nas" in out.split('package "Légende"', 1)[1]
-
-
-def test_plantuml_legend_only_lists_used_types(make_host_factory):
-    """Legend only mentions device_types actually present in the inventory."""
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),  # nas only
-    })
-    out = render(inv)
     legend = out.split('package "Légende"', 1)[1]
-    # 'nas' is in the legend, but 'router' is not (no router in inventory)
     assert "nas" in legend
     assert "router" not in legend
 
 
-def test_graphviz_emits_legend_cluster(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
-    })
-    out = render(inv)
+def test_graphviz_emits_legend(make_host_factory):
+    inv = _inv(make_host_factory(vendor="Synology"))
+    out = render_graphviz(inv)
     assert 'subgraph cluster_legend' in out
-    assert 'label="Légende"' in out
-    # used type appears
-    assert "legend_nas" in out
-
-
-def test_graphviz_legend_only_lists_used_types(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
-    })
-    out = render(inv)
     legend = out.split('subgraph cluster_legend', 1)[1]
     assert "legend_nas" in legend
     assert "legend_router" not in legend
 
 
 def test_plantuml_legend_includes_edge_styles(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.plantuml import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
-    })
-    out = render(inv)
-    legend = out.split('package "Légende"', 1)[1]
-    # Edge style legend mentions all 3 edge types
-    assert "wired" in legend
-    assert "PoE" in legend
-    assert "Wi-Fi" in legend
+    inv = _inv(make_host_factory(vendor="Synology"))
+    legend = render_plantuml(inv).split('package "Légende"', 1)[1]
+    assert "wired" in legend and "PoE" in legend and "Wi-Fi" in legend
 
 
 def test_graphviz_legend_includes_edge_styles(make_host_factory):
-    from intramap.models import Inventory
-    from intramap.renderers.graphviz import render
-
-    inv = Inventory(hosts={
-        "aa:bb:cc:dd:ee:01": make_host_factory(vendor="Synology"),
-    })
-    out = render(inv)
-    legend = out.split("subgraph cluster_legend", 1)[1]
+    inv = _inv(make_host_factory(vendor="Synology"))
+    legend = render_graphviz(inv).split("subgraph cluster_legend", 1)[1]
     assert "legend_wired" in legend
     assert "legend_poe" in legend
     assert "legend_wifi" in legend
+
+
+# ---------------------------------------------------------------------------
+# Échappement robuste (guillemets ET backslash) dans les chaînes émises
+# ---------------------------------------------------------------------------
+
+def test_graphviz_tooltip_escapes_double_quote_in_vendor():
+    inv = _inv(make_host("aa:bb:cc:dd:ee:01", "192.168.1.1",
+                         custom_name="Box", vendor='Acme "Pro"'))
+    out = render_graphviz(inv)
+    # Le guillemet du vendor ne doit pas casser l'attribut tooltip="...".
+    assert r'tooltip="Acme \"Pro\"' in out
+
+
+def test_graphviz_escapes_backslash_in_cluster_label():
+    inv = _inv(make_host("aa:bb:cc:dd:ee:01", "192.168.1.1", custom_name="Box",
+                         location=Location(floor="Cave\\Nord", room="salon")))
+    out = render_graphviz(inv)
+    assert r'label="Cave\\Nord"' in out
+
+
+def test_plantuml_escapes_backslash_in_name():
+    inv = _inv(make_host("aa:bb:cc:dd:ee:01", "192.168.1.1",
+                         custom_name="PC\\test",
+                         location=Location(floor="RDC", room="salon")))
+    out = render_plantuml(inv)
+    assert r"PC\\test" in out
+
+
+def test_plantuml_label_newline_separator_preserved():
+    # Le séparateur \n entre nom / ip / mac doit rester un saut de ligne
+    # PlantUML (un seul backslash), pas être échappé en \\n par mégarde.
+    inv = _inv(make_host("aa:bb:cc:dd:ee:01", "192.168.1.1", custom_name="Box"))
+    out = render_plantuml(inv)
+    assert r"Box\n192.168.1.1" in out

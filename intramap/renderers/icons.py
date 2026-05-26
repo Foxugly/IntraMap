@@ -18,8 +18,8 @@ from intramap.models import DEVICE_TYPES
 
 
 PLANTUML_SPRITES: dict[str, str] = {
-    "router": "network_wired",
-    "switch": "share_nodes",
+    "router": "tower_broadcast",
+    "switch": "network_wired",
     "ap": "wifi",
     "controller": "sliders",
     "nas": "hard_drive",
@@ -33,6 +33,9 @@ PLANTUML_SPRITES: dict[str, str] = {
     "printer": "print",
     "voip": "phone_volume",
     "other": "question",
+    "outlet": "ethernet",
+    "patchpanel": "table_cells",
+    "appliance": "jug_detergent",
 }
 
 DEVICE_COLORS: dict[str, str] = {
@@ -51,11 +54,14 @@ DEVICE_COLORS: dict[str, str] = {
     "voip": "#bcbd22",
     "printer": "#bcbd22",
     "other": "#cccccc",
+    "outlet": "#17becf",
+    "patchpanel": "#8c564b",
+    "appliance": "#d62728",
 }
 
 
 def copy_icons_to(out_dir: str | Path, types: Iterable[str]) -> None:
-    """Copy the SVG icons for the given device_types into <out_dir>/icons/.
+    """Copy the PNG icons for the given device_types into <out_dir>/icons/.
 
     Raises ValueError (BEFORE creating any files) if a requested type is
     not in DEVICE_TYPES, so the output directory is never left in a

@@ -11,7 +11,12 @@ from intramap.models import DiscoveredHost, Host, Inventory, Location
 
 def load(path: str | Path) -> Inventory:
     """Load an Inventory from a YAML file. Returns an empty Inventory if the
-    file does not exist. Raises on parse errors (caller must handle)."""
+    file does not exist. Raises on parse errors (caller must handle).
+
+    The optional top-level ``layout`` key (GUI presentation state) is ignored
+    here: it is not part of the network data model. Use
+    :func:`load_layout_dict` to read it.
+    """
     p = Path(path)
     if not p.exists():
         return Inventory()
@@ -20,13 +25,51 @@ def load(path: str | Path) -> Inventory:
     return Inventory.from_dict(data)
 
 
-def save(inv: Inventory, path: str | Path) -> None:
+def load_layout_dict(path: str | Path) -> dict:
+    """Return the raw ``layout`` mapping from the inventory file (or ``{}``).
+
+    The ``layout`` section holds GUI presentation state (node positions, edge
+    bends, routing style). It is optional and ignored by the data model and
+    the CLI. A missing/invalid section yields ``{}``.
+    """
+    p = Path(path)
+    if not p.exists():
+        return {}
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    layout = data.get("layout")
+    return layout if isinstance(layout, dict) else {}
+
+
+def save(inv: Inventory, path: str | Path, layout: dict | None = None) -> None:
     """Write an Inventory to YAML atomically.
 
     Writes to a temp file in the same directory, then renames over the
     destination. If anything fails the original file (if any) is preserved.
+
+    ``layout`` is the optional GUI presentation section. When given, it is
+    written under the top-level ``layout`` key. When omitted (e.g. the CLI
+    ``scan`` command), any ``layout`` section already present in the file is
+    preserved, so re-scanning never discards the user's map arrangement.
     """
     p = Path(path)
+    if layout is None:
+        layout = load_layout_dict(p) or None
+
+    data = inv.to_dict()  # {"last_scan": ..., "links": [...], "hosts": {...}}
+    document: dict = {"last_scan": data.get("last_scan")}
+    if layout:
+        document["layout"] = layout
+    # CRUCIAL : on persiste les liaisons (câbles), maintenant centralisées
+    # dans Inventory.links (et plus disséminées par hôte).
+    document["links"] = data.get("links", [])
+    document["hosts"] = data.get("hosts", {})
+
     p.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(
         prefix=p.name + ".",
@@ -40,7 +83,7 @@ def save(inv: Inventory, path: str | Path) -> None:
             os.close(fd)
             raise
         with f:
-            yaml.safe_dump(inv.to_dict(), f, sort_keys=False, allow_unicode=True)
+            yaml.safe_dump(document, f, sort_keys=False, allow_unicode=True)
         os.replace(tmp_name, p)
     except Exception:
         # On any failure, remove temp file if it still exists
@@ -56,10 +99,10 @@ def merge(inv: Inventory, discovered: Iterable[DiscoveredHost],
           now: datetime) -> None:
     """Merge a list of newly discovered hosts into the inventory in place.
 
-    - New MAC: added with empty custom_name/location/uplink,
+    - New MAC: added with empty custom_name/location/liaisons,
       first_seen=last_seen=now, manual=False
     - Existing MAC, manual=False: ip/hostname/vendor/last_seen updated,
-      online=True; custom_name/location/uplink/wifi_ap_mac/first_seen preserved
+      online=True; custom_name/location/liaisons/wifi_ap_mac/first_seen preserved
     - Existing MAC, manual=True: ignored entirely (no update, no offline marking)
     - Existing MAC absent from discovered, manual=False: online=False, other fields preserved
     """
@@ -85,7 +128,6 @@ def merge(inv: Inventory, discovered: Iterable[DiscoveredHost],
                 last_seen=now,
                 custom_name=None,
                 location=Location(),
-                uplink=None,
                 online=True,
             )
 

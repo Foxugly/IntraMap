@@ -15,9 +15,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+gui = ["PySide6>=6.6"]
 
 [project.scripts]
 intramap = "intramap.cli:main"
+
+[project.gui-scripts]
+intramap-gui = "intramap.gui.app:main"
 
 [tool.setuptools.packages.find]
 include = ["intramap*"]

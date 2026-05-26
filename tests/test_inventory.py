@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from intramap.inventory import load, merge, save
-from intramap.models import DiscoveredHost, Host, Inventory, Location, Uplink
+from intramap.models import DiscoveredHost, Host, Inventory, Link, Location
 
 
 def make_host(mac: str, ip: str, **kwargs) -> Host:
@@ -158,7 +158,8 @@ def test_merge_adds_new_host_with_empty_annotations():
     assert h.vendor == "Sagemcom"
     assert h.custom_name is None
     assert h.location == Location()
-    assert h.uplink is None
+    from intramap.models import links_touching
+    assert links_touching(inv, h.mac) == []
     assert h.first_seen == now
     assert h.last_seen == now
     assert h.online is True
@@ -168,11 +169,9 @@ def test_merge_adds_new_host_with_empty_annotations():
 def test_merge_existing_host_preserves_annotations():
     earlier = datetime(2026, 5, 1, 10, 0, 0)
     now = datetime(2026, 5, 24, 14, 0, 0)
-    uplink_value = Uplink(
-        switch_mac="aa:bb:cc:dd:ee:02",
-        switch_port=4,
-        patch_port=7,
-        poe=True,
+    link_value = Link(
+        mac_a="aa:bb:cc:dd:ee:01", port_a=7,
+        mac_b="aa:bb:cc:dd:ee:02", port_b=4, poe=True,
     )
     inv = Inventory(hosts={
         "aa:bb:cc:dd:ee:01": Host(
@@ -182,12 +181,11 @@ def test_merge_existing_host_preserves_annotations():
             vendor="OldVendor",
             custom_name="Box internet",
             location=Location(floor="RDC", room="salon"),
-            uplink=uplink_value,
             first_seen=earlier,
             last_seen=earlier,
             online=False,
         ),
-    }, last_scan=earlier)
+    }, links=[link_value], last_scan=earlier)
 
     discovered = [DiscoveredHost(mac="aa:bb:cc:dd:ee:01",
                                  ip="192.168.1.1",
@@ -205,7 +203,7 @@ def test_merge_existing_host_preserves_annotations():
     # preserved
     assert h.custom_name == "Box internet"
     assert h.location == Location(floor="RDC", room="salon")
-    assert h.uplink == uplink_value
+    assert link_value in inv.links   # le câble est préservé par merge
     assert h.first_seen == earlier
 
 
@@ -306,6 +304,61 @@ def test_merge_does_not_mark_manual_hosts_offline_when_absent():
     h = inv.hosts["aa:bb:cc:dd:ee:01"]
     assert h.online is True  # NOT marked offline
     assert h.last_seen == earlier  # untouched
+
+
+def test_load_layout_dict_returns_layout_section(tmp_path: Path):
+    from intramap.inventory import load_layout_dict
+    path = tmp_path / "inv.yaml"
+    path.write_text(
+        "last_scan: null\n"
+        "layout:\n"
+        "  routing_style: ortho_v\n"
+        "  positions:\n"
+        "    aa:bb:cc:dd:ee:01: {x: 10.0, y: 20.0}\n"
+        "hosts: {}\n",
+        encoding="utf-8",
+    )
+    layout = load_layout_dict(path)
+    assert layout["routing_style"] == "ortho_v"
+
+
+def test_load_layout_dict_missing_file_returns_empty(tmp_path: Path):
+    from intramap.inventory import load_layout_dict
+    assert load_layout_dict(tmp_path / "nope.yaml") == {}
+
+
+def test_save_preserves_existing_layout_when_omitted(tmp_path: Path):
+    """Un re-scan (save sans layout) ne doit jamais effacer l'arrangement."""
+    from intramap.inventory import load_layout_dict
+    path = tmp_path / "inv.yaml"
+    path.write_text(
+        "last_scan: null\n"
+        "layout:\n"
+        "  routing_style: straight\n"
+        "hosts: {}\n",
+        encoding="utf-8",
+    )
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host("aa:bb:cc:dd:ee:01", "192.168.1.1"),
+    }, last_scan=datetime(2026, 5, 24))
+    save(inv, path)  # layout omis : doit relire et réémettre l'existant
+    assert load_layout_dict(path).get("routing_style") == "straight"
+
+
+def test_save_then_load_round_trip_with_links(tmp_path: Path):
+    inv = Inventory(
+        hosts={
+            "aa:bb:cc:dd:ee:01": make_host("aa:bb:cc:dd:ee:01", "192.168.1.1"),
+            "aa:bb:cc:dd:ee:02": make_host("aa:bb:cc:dd:ee:02", "192.168.1.2"),
+        },
+        links=[Link(mac_a="aa:bb:cc:dd:ee:01", port_a=1,
+                    mac_b="aa:bb:cc:dd:ee:02", port_b=2, poe=True)],
+        last_scan=datetime(2026, 5, 24),
+    )
+    path = tmp_path / "inv.yaml"
+    save(inv, path)
+    loaded = load(path)
+    assert loaded.links == inv.links
 
 
 def test_merge_preserves_wifi_ap_mac():

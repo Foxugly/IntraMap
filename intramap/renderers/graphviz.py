@@ -1,16 +1,14 @@
 from collections import defaultdict
 from pathlib import Path
 
-from intramap.models import Host, Inventory, Uplink, _resolve_device_type
+from intramap.models import Host, Inventory, _resolve_device_type
 from intramap.renderers.icons import copy_icons_to, DEVICE_COLORS
-
-
-_UNLOCALISED = "Non localisé"
-_NO_ROOM = "(sans pièce)"
-
-
-def _escape(text: str) -> str:
-    return text.replace('"', '\\"')
+from intramap.renderers._common import (
+    UNLOCALISED as _UNLOCALISED,
+    bucket as _bucket,
+    edge_label as _edge_label,
+    escape_quotes as _escape,
+)
 
 
 def _escape_html(text: str) -> str:
@@ -20,7 +18,6 @@ def _escape_html(text: str) -> str:
 
 
 def _html_label(host: Host) -> str:
-    """Build a Graphviz HTML label with differentiated text sizes."""
     name = _escape_html(host.custom_name or host.mac)
     parts = [f"<B>{name}</B>"]
     if host.ip:
@@ -34,35 +31,11 @@ def _html_label(host: Host) -> str:
 def _tooltip(host: Host) -> str:
     vendor = host.vendor or "unknown"
     last = host.last_seen.date().isoformat()
-    return f"{vendor} | last seen {last}"
-
-
-def _bucket(host: Host) -> tuple[str, str, str | None]:
-    loc = host.location
-    if loc.floor is None:
-        return _UNLOCALISED, "", None
-    room = loc.room or _NO_ROOM
-    return loc.floor, room, loc.rack
-
-
-def _edge_label(uplink: Uplink) -> str:
-    parts: list[str] = []
-    if uplink.switch_port is not None:
-        parts.append(f"sw:{uplink.switch_port}")
-    if uplink.patch_port is not None:
-        parts.append(f"pp:{uplink.patch_port}")
-    if uplink.poe:
-        parts.append("PoE")
-    return " ".join(parts)
+    return _escape(f"{vendor} | last seen {last}")
 
 
 def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
-    """Render `inv` as Graphviz DOT text.
-
-    If `copy_assets_to` is given, also copy the SVG icons of all used
-    device_types into `<copy_assets_to>/icons/`.
-    """
-    # Stable node IDs per MAC so edges reference consistent identifiers
+    """Render `inv` as Graphviz DOT text."""
     node_ids: dict[str, str] = {
         mac: f"h{i + 1}" for i, mac in enumerate(sorted(inv.hosts.keys()))
     }
@@ -136,30 +109,25 @@ def render(inv: Inventory, copy_assets_to: str | Path | None = None) -> str:
             render_host(host, u_indent)
         close_cluster(u_indent)
 
-    # Edges from declared uplinks
-    for mac in sorted(inv.hosts.keys()):
-        host = inv.hosts[mac]
-        u = host.uplink
-        if u is None or u.switch_mac is None:
-            continue
-        if u.switch_mac not in node_ids:
+    # Edges from declared links (symmetric — one edge per cable).
+    for link in inv.links:
+        if link.mac_a not in node_ids or link.mac_b not in node_ids:
             continue
         attrs: list[str] = []
-        label = _edge_label(u)
+        label = _edge_label(link)
         if label:
             attrs.append(f'label="{_escape(label)}"')
-        if u.poe:
+        if link.poe:
             attrs.append('color="orange"')
             attrs.append("penwidth=2")
         attrs_str = f' [{", ".join(attrs)}]' if attrs else ""
-        lines.append(f"  {node_ids[host.mac]} -- {node_ids[u.switch_mac]}{attrs_str};")
+        lines.append(
+            f"  {node_ids[link.mac_a]} -- {node_ids[link.mac_b]}{attrs_str};")
 
     # Edges from Wi-Fi associations
     for mac in sorted(inv.hosts.keys()):
         host = inv.hosts[mac]
-        if host.wifi_ap_mac is None:
-            continue
-        if host.wifi_ap_mac not in node_ids:
+        if host.wifi_ap_mac is None or host.wifi_ap_mac not in node_ids:
             continue
         src = node_ids[host.mac]
         dst = node_ids[host.wifi_ap_mac]
