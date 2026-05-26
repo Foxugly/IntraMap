@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from intramap.gui.i18n import tr
 from intramap.models import (
     DEVICE_TYPES, Host, Inventory, Link, Location, is_valid_ip,
     links_touching, normalize_mac,
@@ -71,10 +72,10 @@ class LinkRow(QFrame):
         outer.setSpacing(5)
 
         header = QHBoxLayout()
-        header.addWidget(QLabel("Port ici"))
+        header.addWidget(QLabel(tr("Port ici")))
         self._this_port = QLineEdit()
         self._this_port.setFixedWidth(52)
-        self._this_port.setPlaceholderText("n°")
+        self._this_port.setPlaceholderText(tr("n°"))
         header.addWidget(self._this_port)
         header.addWidget(QLabel("↔"))
         self._peer = QComboBox()
@@ -87,13 +88,13 @@ class LinkRow(QFrame):
         header.addWidget(self._peer, 1)
         self._goto_btn = QPushButton("↗")
         self._goto_btn.setFixedWidth(28)
-        self._goto_btn.setToolTip("Ouvrir l'appareil en face")
+        self._goto_btn.setToolTip(tr("Ouvrir l'appareil en face"))
         self._goto_btn.clicked.connect(self._emit_goto)
         header.addWidget(self._goto_btn)
         self._remove_btn = QPushButton("✕")
         self._remove_btn.setFixedWidth(28)
         self._remove_btn.setStyleSheet("color:#c0392b;")
-        self._remove_btn.setToolTip("Supprimer cette liaison")
+        self._remove_btn.setToolTip(tr("Supprimer cette liaison"))
         self._remove_btn.clicked.connect(self.removed.emit)
         header.addWidget(self._remove_btn)
         outer.addLayout(header)
@@ -101,9 +102,9 @@ class LinkRow(QFrame):
         form = QFormLayout()
         form.setSpacing(5)
         self._peer_port = QLineEdit()
-        self._peer_port.setPlaceholderText("port de l'appareil en face")
-        self._poe = QCheckBox("Liaison alimentée en PoE")
-        form.addRow("Port en face :", self._peer_port)
+        self._peer_port.setPlaceholderText(tr("port de l'appareil en face"))
+        self._poe = QCheckBox(tr("Liaison alimentée en PoE"))
+        form.addRow(tr("Port en face :"), self._peer_port)
         form.addRow("", self._poe)
         outer.addLayout(form)
 
@@ -194,7 +195,7 @@ class Inspector(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self._title = QLabel("Aucun device sélectionné")
+        self._title = QLabel(tr("Aucun device sélectionné"))
         self._title.setStyleSheet(
             "font-weight:bold; font-size:13px; padding:10px 12px 4px 12px;")
         self._title.setWordWrap(True)
@@ -218,46 +219,46 @@ class Inspector(QWidget):
         self._mac_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         v1.addWidget(self._mac_label)
 
-        ident = QGroupBox("Identité")
+        ident = QGroupBox(tr("Identité"))
         f1 = QFormLayout(ident)
         self._name = QLineEdit()
         self._ip = QLineEdit()
         self._hostname = QLineEdit()
         self._vendor = QLineEdit()
         self._dtype = QComboBox()
-        self._dtype.addItem(_AUTO, None)
+        self._dtype.addItem(tr(_AUTO), None)
         for t in sorted(DEVICE_TYPES):
             self._dtype.addItem(t, t)
-        self._online = QCheckBox("En ligne")
-        self._gateway = QCheckBox("Passerelle Internet (accès box)")
+        self._online = QCheckBox(tr("En ligne"))
+        self._gateway = QCheckBox(tr("Passerelle Internet (accès box)"))
         self._poe_gateway = QComboBox()
-        self._poe_gateway.setToolTip(
+        self._poe_gateway.setToolTip(tr(
             "Switch PoE qui alimente cet appareil. Renseigné = appareil "
-            "PoE : son chemin reste en PoE jusqu'à ce switch, puis hors PoE.")
-        f1.addRow("Nom :", self._name)
-        f1.addRow("IP :", self._ip)
-        f1.addRow("Hostname :", self._hostname)
-        f1.addRow("Constructeur :", self._vendor)
-        f1.addRow("Type :", self._dtype)
+            "PoE : son chemin reste en PoE jusqu'à ce switch, puis hors PoE."))
+        f1.addRow(tr("Nom :"), self._name)
+        f1.addRow(tr("IP :"), self._ip)
+        f1.addRow(tr("Hostname :"), self._hostname)
+        f1.addRow(tr("Constructeur :"), self._vendor)
+        f1.addRow(tr("Type :"), self._dtype)
         f1.addRow("", self._online)
         f1.addRow("", self._gateway)
-        f1.addRow("Passerelle PoE :", self._poe_gateway)
+        f1.addRow(tr("Passerelle PoE :"), self._poe_gateway)
         v1.addWidget(ident)
 
-        loc = QGroupBox("Emplacement")
+        loc = QGroupBox(tr("Emplacement"))
         f2 = QFormLayout(loc)
         self._floor = QLineEdit()
         self._room = QLineEdit()
         self._rack = QLineEdit()
         self._rack_unit = QLineEdit()
-        self._rack_unit.setPlaceholderText("n° U (optionnel)")
-        f2.addRow("Étage :", self._floor)
-        f2.addRow("Pièce :", self._room)
-        f2.addRow("Baie :", self._rack)
-        f2.addRow("Unité (U) :", self._rack_unit)
+        self._rack_unit.setPlaceholderText(tr("n° U (optionnel)"))
+        f2.addRow(tr("Étage :"), self._floor)
+        f2.addRow(tr("Pièce :"), self._room)
+        f2.addRow(tr("Baie :"), self._rack)
+        f2.addRow(tr("Unité (U) :"), self._rack_unit)
         v1.addWidget(loc)
         v1.addStretch(1)
-        self._tabs.addTab(tab1, "Identité")
+        self._tabs.addTab(tab1, tr("Identité"))
 
         # --- onglet 2 : Liaisons ----------------------------------------
         tab2 = QScrollArea()
@@ -269,38 +270,38 @@ class Inspector(QWidget):
         v2.setContentsMargins(12, 12, 12, 12)
         v2.setSpacing(10)
 
-        links = QGroupBox("Liaisons")
+        links = QGroupBox(tr("Liaisons"))
         links_outer = QVBoxLayout(links)
         links_outer.setSpacing(8)
         self._links_container = QVBoxLayout()
         self._links_container.setSpacing(8)
         links_outer.addLayout(self._links_container)
-        self._empty_links = QLabel("Aucune liaison.")
+        self._empty_links = QLabel(tr("Aucune liaison."))
         self._empty_links.setStyleSheet("color:#999; font-style:italic;")
         self._links_container.addWidget(self._empty_links)
-        self._add_link_btn = QPushButton("+ Ajouter une liaison")
+        self._add_link_btn = QPushButton(tr("+ Ajouter une liaison"))
         self._add_link_btn.clicked.connect(self._add_link)
         links_outer.addWidget(self._add_link_btn)
         v2.addWidget(links)
 
-        wifi = QGroupBox("Association Wi-Fi")
+        wifi = QGroupBox(tr("Association Wi-Fi"))
         f4 = QFormLayout(wifi)
         self._wifi_ap = QComboBox()
-        f4.addRow("Point d'accès :", self._wifi_ap)
+        f4.addRow(tr("Point d'accès :"), self._wifi_ap)
         v2.addWidget(wifi)
         v2.addStretch(1)
-        self._tabs.addTab(tab2, "Liaisons")
+        self._tabs.addTab(tab2, tr("Liaisons"))
 
         bottom = QVBoxLayout()
         bottom.setContentsMargins(12, 6, 12, 10)
         bottom.setSpacing(6)
-        note = QLabel("Les modifications sont appliquées automatiquement.")
+        note = QLabel(tr("Les modifications sont appliquées automatiquement."))
         note.setStyleSheet("color:#777; font-style:italic;")
         note.setWordWrap(True)
         bottom.addWidget(note)
         btns = QHBoxLayout()
         btns.addStretch(1)
-        self._delete_btn = QPushButton("Supprimer le device")
+        self._delete_btn = QPushButton(tr("Supprimer le device"))
         self._delete_btn.setStyleSheet("color:#c0392b;")
         self._delete_btn.clicked.connect(self._delete)
         btns.addWidget(self._delete_btn)
@@ -325,7 +326,7 @@ class Inspector(QWidget):
             self._host = host
             self._inv = inv
             if host is None:
-                self._title.setText("Aucun device sélectionné")
+                self._title.setText(tr("Aucun device sélectionné"))
                 self._mac_label.setText("—")
                 self._rebuild_links()
                 self._set_enabled(False)
@@ -363,9 +364,9 @@ class Inspector(QWidget):
     def refresh_title(self) -> None:
         h = self._host
         if h is None:
-            self._title.setText("Aucun device sélectionné")
+            self._title.setText(tr("Aucun device sélectionné"))
             return
-        suffix = " — manuel" if h.manual else ""
+        suffix = tr(" — manuel") if h.manual else ""
         self._title.setText((h.custom_name or h.mac) + suffix)
 
     def _populate_peer_combo(self, combo: QComboBox, inv: Inventory,
@@ -441,9 +442,9 @@ class Inspector(QWidget):
         ip_text = self._ip.text().strip()
         if ip_text and not is_valid_ip(ip_text):
             QMessageBox.warning(
-                self, "IP invalide",
-                f"« {ip_text} » n'est pas une adresse IP valide ; "
-                "valeur précédente conservée.")
+                self, tr("IP invalide"),
+                tr("« {ip} » n'est pas une adresse IP valide ; valeur "
+                   "précédente conservée.").format(ip=ip_text))
             self._ip.setText(h.ip or "")  # revert vers l'ancienne valeur
         else:
             h.ip = ip_text or None
@@ -471,7 +472,7 @@ class Inspector(QWidget):
             desired = [lk for lk in (row.to_link() for row in self._link_rows)
                        if lk is not None]
         except ValueError as e:
-            QMessageBox.warning(self, "Liaison invalide", str(e))
+            QMessageBox.warning(self, tr("Liaison invalide"), str(e))
             return
         self._inv.links = [lk for lk in self._inv.links
                            if id(lk) not in managed]
@@ -489,7 +490,7 @@ class Inspector(QWidget):
         mac = self._host.mac
         name = self._host.custom_name or mac
         if QMessageBox.question(
-            self, "Supprimer le device",
-            f"Supprimer « {name} » de la carte ?",
+            self, tr("Supprimer le device"),
+            tr("Supprimer « {name} » de la carte ?").format(name=name),
         ) == QMessageBox.Yes:
             self.host_deleted.emit(mac)

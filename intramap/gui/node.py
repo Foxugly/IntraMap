@@ -6,6 +6,7 @@ from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsObject
 
 from intramap.gui.assets import device_color, icon_pixmap
+from intramap.gui.i18n import tr
 from intramap.models import Host, _resolve_device_type
 
 NODE_W = 172.0
@@ -80,14 +81,15 @@ class DeviceNode(QGraphicsObject):
         h = self.host
         lines = [
             h.custom_name or h.mac,
-            f"MAC : {h.mac}",
-            f"IP : {h.ip or '—'}",
-            f"Type : {_resolve_device_type(h)}",
-            f"Constructeur : {h.vendor or '—'}",
-            f"État : {'en ligne' if h.online else 'hors ligne'}",
+            f"{tr('MAC :')} {h.mac}",
+            f"{tr('IP :')} {h.ip or '—'}",
+            f"{tr('Type :')} {_resolve_device_type(h)}",
+            f"{tr('Constructeur :')} {h.vendor or '—'}",
+            f"{tr('État :')} "
+            f"{tr('en ligne') if h.online else tr('hors ligne')}",
         ]
         if h.manual:
-            lines.append("(device ajouté manuellement)")
+            lines.append(tr("(device ajouté manuellement)"))
         return "\n".join(lines)
 
     # -- rendu -------------------------------------------------------------

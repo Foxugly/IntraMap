@@ -127,6 +127,56 @@ _CATALOG: dict[str, dict[str, str]] = {
         "Modifications non enregistrées": "Unsaved changes",
         "Enregistrer les modifications avant de continuer ?":
             "Save changes before continuing?",
+        # --- Nœud (tooltip) ---
+        "MAC :": "MAC:",
+        "IP :": "IP:",
+        "Type :": "Type:",
+        "Constructeur :": "Vendor:",
+        "État :": "State:",
+        "en ligne": "online",
+        "hors ligne": "offline",
+        "(device ajouté manuellement)": "(manually added device)",
+        # --- Inspecteur ---
+        "(auto)": "(auto)",
+        "Port ici": "Port here",
+        "n°": "no.",
+        "Ouvrir l'appareil en face": "Open the peer device",
+        "Supprimer cette liaison": "Delete this link",
+        "port de l'appareil en face": "peer device port",
+        "Liaison alimentée en PoE": "PoE-powered link",
+        "Port en face :": "Peer port:",
+        "Identité": "Identity",
+        "Nom :": "Name:",
+        "Hostname :": "Hostname:",
+        "En ligne": "Online",
+        "Passerelle Internet (accès box)": "Internet gateway (box access)",
+        "Switch PoE qui alimente cet appareil. Renseigné = appareil "
+        "PoE : son chemin reste en PoE jusqu'à ce switch, puis hors PoE.":
+            "PoE switch that powers this device. Set = PoE device: its path "
+            "stays PoE up to this switch, then non-PoE.",
+        "Passerelle PoE :": "PoE gateway:",
+        "Emplacement": "Location",
+        "n° U (optionnel)": "U number (optional)",
+        "Étage :": "Floor:",
+        "Pièce :": "Room:",
+        "Baie :": "Rack:",
+        "Unité (U) :": "Unit (U):",
+        "Liaisons": "Links",
+        "Aucune liaison.": "No link.",
+        "+ Ajouter une liaison": "+ Add a link",
+        "Association Wi-Fi": "Wi-Fi association",
+        "Point d'accès :": "Access point:",
+        "Les modifications sont appliquées automatiquement.":
+            "Changes are applied automatically.",
+        "Supprimer le device": "Delete the device",
+        " — manuel": " — manual",
+        "IP invalide": "Invalid IP",
+        "« {ip} » n'est pas une adresse IP valide ; valeur "
+        "précédente conservée.":
+            "« {ip} » is not a valid IP address; previous value kept.",
+        "Liaison invalide": "Invalid link",
+        "Supprimer « {name} » de la carte ?":
+            "Remove « {name} » from the map?",
     },
 }
 
