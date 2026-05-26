@@ -423,6 +423,45 @@ def test_inspector_keeps_previous_ip_on_invalid_input(qapp, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Diff de scan (dialogue post-scan)
+# ---------------------------------------------------------------------------
+
+def test_scan_done_shows_diff_dialog_on_changes(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from intramap.gui.main_window import MainWindow
+    from intramap.models import DiscoveredHost
+    win = MainWindow(inventory_path=str(tmp_path / "none.yaml"))
+    win.inv = _inv(_host("aa:bb:cc:dd:ee:01", ip="192.168.1.1"))
+    win._reload_canvas()
+    win._reset_history()
+    calls = []
+    monkeypatch.setattr(QMessageBox, "information",
+                        staticmethod(lambda *a, **k: calls.append(a)))
+    win._on_scan_done([DiscoveredHost(mac="aa:bb:cc:dd:ee:09",
+                                      ip="192.168.1.9", hostname=None,
+                                      vendor=None)])
+    assert calls, "un changement doit ouvrir le dialogue récapitulatif"
+    assert "aa:bb:cc:dd:ee:09" in calls[0][2]
+
+
+def test_scan_done_no_dialog_when_no_change(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from intramap.gui.main_window import MainWindow
+    from intramap.models import DiscoveredHost
+    win = MainWindow(inventory_path=str(tmp_path / "none.yaml"))
+    win.inv = _inv(_host("aa:bb:cc:dd:ee:01", ip="192.168.1.1"))
+    win._reload_canvas()
+    win._reset_history()
+    calls = []
+    monkeypatch.setattr(QMessageBox, "information",
+                        staticmethod(lambda *a, **k: calls.append(a)))
+    win._on_scan_done([DiscoveredHost(mac="aa:bb:cc:dd:ee:01",
+                                      ip="192.168.1.1", hostname=None,
+                                      vendor=None)])
+    assert not calls
+
+
+# ---------------------------------------------------------------------------
 # ScanWorker — logique de run() et cycle de vie du thread à la fermeture
 # ---------------------------------------------------------------------------
 

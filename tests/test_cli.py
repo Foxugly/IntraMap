@@ -280,6 +280,20 @@ def test_scan_merges_into_existing_inventory(tmp_path: Path):
     assert inv.hosts["aa:bb:cc:dd:ee:02"].online is False
 
 
+def test_scan_diff_lists_new_device(tmp_path: Path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_inventory(inv_path)
+    fake = [DiscoveredHost(mac="aa:bb:cc:dd:ee:09", ip="192.168.1.9",
+                           hostname="new", vendor="Apple")]
+    with patch("intramap.cli.scanner.scan", return_value=fake):
+        rc = main(["--inventory", str(inv_path), "scan",
+                   "--network", "192.168.1.0/24"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Nouveaux" in out
+    assert "aa:bb:cc:dd:ee:09" in out
+
+
 def test_scan_auto_detects_single_subnet(tmp_path: Path):
     inv_path = tmp_path / "inv.yaml"
     with patch("intramap.cli._detect_subnets", return_value=["192.168.1.0/24"]):

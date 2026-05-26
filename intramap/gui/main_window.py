@@ -28,6 +28,7 @@ from intramap.gui.path_report_dialog import PathReportDialog
 from intramap.gui.scan_worker import ScanWorker, detect_subnets
 from intramap.gui.switch_dialog import SwitchPortDialog
 from intramap.models import Inventory, _resolve_device_type
+from intramap.scan_diff import diff_inventories, format_scan_diff
 
 _DEFAULT_INVENTORY = "inventory.yaml"
 _RECENTS_KEY = "recent_files"
@@ -749,14 +750,19 @@ class MainWindow(QMainWindow):
         worker.start()
 
     def _on_scan_done(self, discovered: list) -> None:
-        before = set(self.inv.hosts.keys())
+        before = Inventory.from_dict(self.inv.to_dict())  # copie pour le diff
         inventory_mod.merge(self.inv, discovered, now=datetime.now())
-        new = len(set(self.inv.hosts.keys()) - before)
+        diff = diff_inventories(before, self.inv)
         self._reload_canvas()
         self._set_dirty(True)
+        self._record_history()
         self.statusBar().showMessage(
             f"Scan terminé : {len(discovered)} device(s) détecté(s), "
-            f"{new} nouveau(x).")
+            f"{len(diff.appeared)} nouveau(x).")
+        if diff.has_changes:
+            QMessageBox.information(
+                self, "Changements du scan",
+                format_scan_diff(diff, self.inv))
 
     def _on_scan_failed(self, message: str) -> None:
         QMessageBox.warning(self, "Échec du scan", message)

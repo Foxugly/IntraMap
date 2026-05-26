@@ -11,7 +11,8 @@ import psutil
 
 from intramap import inventory as inventory_mod
 from intramap import scanner
-from intramap.models import _resolve_device_type
+from intramap.models import Inventory, _resolve_device_type
+from intramap.scan_diff import diff_inventories, format_scan_diff
 from intramap.renderers import plantuml as plantuml_renderer
 from intramap.renderers import graphviz as graphviz_renderer
 from intramap.renderers import mermaid as mermaid_renderer
@@ -251,6 +252,7 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         return 4
     now = datetime.now()
     previous_macs = set(inv.hosts.keys())
+    before = Inventory.from_dict(inv.to_dict())  # copie pour le diff
     inventory_mod.merge(inv, discovered, now=now)
     inventory_mod.save(inv, inv_path)
 
@@ -263,6 +265,10 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         f"{len(unnamed)} without custom_name."
     )
     print(f"Inventory: {inv_path}")
+    diff = diff_inventories(before, inv)
+    if diff.has_changes:
+        print()
+        print(format_scan_diff(diff, inv), end="")
     if len(discovered) == 0:
         print(
             "Warning: scan returned zero hosts. On macOS/Linux, MAC discovery "
