@@ -10,7 +10,7 @@ from PySide6.QtGui import (
     QPageLayout, QPageSize, QPainter, QPdfWriter, QTextDocument,
 )
 from PySide6.QtWidgets import (
-    QFileDialog, QInputDialog, QMainWindow, QMessageBox, QSplitter,
+    QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMessageBox, QSplitter,
     QStyle, QWidget,
 )
 
@@ -283,6 +283,14 @@ class MainWindow(QMainWindow):
         tb.addAction(self.act_fit)
         tb.addAction(self.act_zoom_in)
         tb.addAction(self.act_toggle_inspector)
+        tb.addSeparator()
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Rechercher (nom, IP, type, étage…)")
+        self._search.setClearButtonEnabled(True)
+        self._search.setFixedWidth(240)
+        self._search.textChanged.connect(self._on_search)
+        self._search.returnPressed.connect(self._on_search_enter)
+        tb.addWidget(self._search)
 
     # -- état / titre ------------------------------------------------------
     def _set_dirty(self, dirty: bool) -> None:
@@ -900,6 +908,14 @@ class MainWindow(QMainWindow):
         if mac and mac in self.inv.hosts:
             self.canvas.select_mac(mac)
             self.inspector.set_host(self.inv.hosts[mac], self.inv)
+
+    def _on_search(self, text: str) -> None:
+        n = self.canvas.filter_nodes(text)
+        if text.strip():
+            self.statusBar().showMessage(f"{n} appareil(s) correspondant(s)")
+
+    def _on_search_enter(self) -> None:
+        self.canvas.center_on_first_match(self._search.text())
 
     def _on_node_moved(self) -> None:
         self._set_dirty(True)

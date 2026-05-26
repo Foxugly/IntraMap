@@ -48,6 +48,10 @@ class DeviceNode(QGraphicsObject):
     def scene_center(self) -> QPointF:
         return self.mapToScene(QPointF(NODE_W / 2, NODE_H / 2))
 
+    def set_dimmed(self, dimmed: bool) -> None:
+        """Estompe (recherche) ou ré-affiche le nœud à pleine opacité."""
+        self.setOpacity(0.25 if dimmed else 1.0)
+
     # -- arêtes ------------------------------------------------------------
     def add_edge(self, edge) -> None:
         self._edges.append(edge)

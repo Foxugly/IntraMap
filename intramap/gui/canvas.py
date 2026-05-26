@@ -9,11 +9,27 @@ from intramap.gui.edge import Edge
 from intramap.gui.group import GroupBox
 from intramap.gui.layout import DEFAULT_ROUTING_STYLE
 from intramap.gui.node import DeviceNode
-from intramap.models import Inventory, Link
+from intramap.models import Inventory, Link, _resolve_device_type
 
 _MIN_SCALE = 0.15
 _MAX_SCALE = 4.0
 _UNLOCATED = "Non localisé"
+
+
+def node_matches(host, query: str) -> bool:
+    """True si ``host`` correspond à la requête de recherche libre.
+
+    Requête vide -> True (aucun filtre). Sinon, recherche de sous-chaîne
+    (insensible à la casse) dans nom / hostname / IP / MAC / type / étage /
+    pièce.
+    """
+    q = query.strip().lower()
+    if not q:
+        return True
+    fields = [host.custom_name, host.hostname, host.ip, host.mac,
+              _resolve_device_type(host),
+              host.location.floor, host.location.room]
+    return any(q in f.lower() for f in fields if f)
 
 
 def _link_label(link: Link, this_mac: str | None = None) -> str:
@@ -212,6 +228,26 @@ class MapView(QGraphicsView):
     def set_handles_visible(self, visible: bool) -> None:
         for edge in self.edges:
             edge.set_handles_visible(visible)
+
+    def filter_nodes(self, query: str) -> int:
+        """Estompe les nœuds ne correspondant pas à ``query`` ; renvoie le
+        nombre de correspondances. Requête vide -> tout ré-affiché."""
+        q = query.strip()
+        matches = 0
+        for node in self.nodes.values():
+            ok = node_matches(node.host, q)
+            node.set_dimmed(bool(q) and not ok)
+            if ok:
+                matches += 1
+        return matches
+
+    def center_on_first_match(self, query: str) -> None:
+        if not query.strip():
+            return
+        for mac in sorted(self.nodes):
+            if node_matches(self.nodes[mac].host, query):
+                self.centerOn(self.nodes[mac])
+                return
 
     def _update_scene_rect(self) -> None:
         if not self.nodes:

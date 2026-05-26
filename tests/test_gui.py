@@ -462,6 +462,54 @@ def test_scan_done_no_dialog_when_no_change(qapp, tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Recherche / filtre sur le canvas
+# ---------------------------------------------------------------------------
+
+def test_node_matches_various_fields():
+    from intramap.gui.canvas import node_matches
+    from intramap.models import Location
+    h = _host("aa:bb:cc:dd:ee:01", ip="192.168.1.50", custom_name="Box Salon",
+              device_type="router")
+    h.location = Location(floor="RDC", room="Salon")
+    assert node_matches(h, "")            # vide -> tout correspond
+    assert node_matches(h, "box")         # nom (insensible casse)
+    assert node_matches(h, "192.168")     # IP
+    assert node_matches(h, "ee:01")       # MAC
+    assert node_matches(h, "router")      # type
+    assert node_matches(h, "rdc")         # étage
+    assert not node_matches(h, "zzz")
+
+
+def test_filter_nodes_dims_non_matching(qapp):
+    from intramap.gui.canvas import MapView
+    from intramap.gui.layout import positions_for
+    sw = _host("aa:bb:cc:dd:ee:01", custom_name="SW", device_type="switch")
+    pc = _host("aa:bb:cc:dd:ee:02", custom_name="PC", device_type="laptop")
+    inv = _inv(sw, pc)
+    view = MapView()
+    view.load(inv, positions_for(inv, {}), {}, "ortho_h")
+    n = view.filter_nodes("switch")
+    assert n == 1
+    assert view.nodes[sw.mac].opacity() == 1.0
+    assert view.nodes[pc.mac].opacity() < 1.0
+    # Requête vide -> tout ré-affiché.
+    view.filter_nodes("")
+    assert view.nodes[sw.mac].opacity() == 1.0
+    assert view.nodes[pc.mac].opacity() == 1.0
+
+
+def test_center_on_first_match_does_not_crash(qapp):
+    from intramap.gui.canvas import MapView
+    from intramap.gui.layout import positions_for
+    sw = _host("aa:bb:cc:dd:ee:01", custom_name="SW", device_type="switch")
+    inv = _inv(sw)
+    view = MapView()
+    view.load(inv, positions_for(inv, {}), {}, "ortho_h")
+    view.center_on_first_match("switch")
+    view.center_on_first_match("")  # no-op
+
+
+# ---------------------------------------------------------------------------
 # ScanWorker — logique de run() et cycle de vie du thread à la fermeture
 # ---------------------------------------------------------------------------
 
