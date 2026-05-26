@@ -14,12 +14,14 @@ import sys
 def main(argv: list[str] | None = None) -> int:
     from PySide6.QtWidgets import QApplication
 
+    from intramap.gui import i18n
     from intramap.gui.main_window import MainWindow
 
     argv = list(sys.argv if argv is None else argv)
     app = QApplication.instance() or QApplication(argv)
     app.setApplicationName("IntraMap")
     app.setApplicationDisplayName("IntraMap")
+    i18n.apply_saved_language()
 
     positional = [a for a in argv[1:] if not a.startswith("-")]
     inventory_path = positional[0] if positional else None

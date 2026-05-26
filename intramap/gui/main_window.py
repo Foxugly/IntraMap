@@ -22,6 +22,8 @@ from intramap.gui.device_dialog import AddDeviceDialog
 from intramap.gui.device_list_dialog import DeviceListDialog
 from intramap.gui.diagnose_dialog import DiagnoseDialog
 from intramap.gui.export_dialog import ExportPdfDialog, page_grid
+from intramap.gui import i18n
+from intramap.gui.i18n import tr
 from intramap.gui.inspector import Inspector
 from intramap.gui.link_dialog import ConnectDialog
 from intramap.gui.path_report_dialog import PathReportDialog
@@ -264,6 +266,17 @@ class MainWindow(QMainWindow):
         m_view.addAction(self.act_device_list)
         m_view.addAction(self.act_path_report)
         m_view.addAction(self.act_diagnose)
+        m_view.addSeparator()
+        m_lang = m_view.addMenu(tr("Langue"))
+        self.lang_group = QActionGroup(self)
+        self.lang_group.setExclusive(True)
+        saved_lang = i18n.load_saved_language()
+        for code, label in i18n.available_languages():
+            act = QAction(label, self, checkable=True)
+            act.setChecked(code == saved_lang)
+            act.triggered.connect(lambda _c=False, lc=code: self._set_language(lc))
+            self.lang_group.addAction(act)
+            m_lang.addAction(act)
 
     def _build_toolbar(self) -> None:
         tb = self.addToolBar("Principale")
@@ -891,6 +904,12 @@ class MainWindow(QMainWindow):
         self._set_dirty(True)
         self._record_history()
         self.statusBar().showMessage("Coudes des liaisons reinitialises")
+
+    def _set_language(self, code: str) -> None:
+        i18n.save_language(code)
+        QMessageBox.information(
+            self, tr("Langue modifiée"),
+            tr("La langue sera appliquée au prochain démarrage."))
 
     def _show_device_list(self) -> None:
         DeviceListDialog(self.inv, self).exec()
