@@ -380,6 +380,49 @@ def test_new_change_after_undo_clears_redo(qapp, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Validation IP dans les dialogues
+# ---------------------------------------------------------------------------
+
+def test_add_device_dialog_rejects_invalid_ip(qapp, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from intramap.gui.device_dialog import AddDeviceDialog
+    monkeypatch.setattr(QMessageBox, "warning",
+                        staticmethod(lambda *a, **k: None))
+    dlg = AddDeviceDialog(Inventory())
+    dlg._mac.setText("02:00:00:00:00:01")
+    dlg._ip.setText("999.1.2.3")
+    dlg._accept()
+    assert dlg.result_host is None
+
+
+def test_add_device_dialog_accepts_valid_ip(qapp, monkeypatch):
+    from PySide6.QtWidgets import QDialog
+    from intramap.gui.device_dialog import AddDeviceDialog
+    # _accept appelle self.accept() ; on neutralise pour éviter tout effet.
+    monkeypatch.setattr(QDialog, "accept", lambda self: None)
+    dlg = AddDeviceDialog(Inventory())
+    dlg._mac.setText("02:00:00:00:00:01")
+    dlg._ip.setText("192.168.1.42")
+    dlg._accept()
+    assert dlg.result_host is not None
+    assert dlg.result_host.ip == "192.168.1.42"
+
+
+def test_inspector_keeps_previous_ip_on_invalid_input(qapp, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from intramap.gui.inspector import Inspector
+    monkeypatch.setattr(QMessageBox, "warning",
+                        staticmethod(lambda *a, **k: None))
+    a = _host("aa:bb:cc:dd:ee:01", ip="192.168.1.10")
+    inv = _inv(a)
+    insp = Inspector()
+    insp.set_host(a, inv)
+    insp._ip.setText("nope")
+    insp._apply()
+    assert a.ip == "192.168.1.10"
+
+
+# ---------------------------------------------------------------------------
 # ScanWorker — logique de run() et cycle de vie du thread à la fermeture
 # ---------------------------------------------------------------------------
 

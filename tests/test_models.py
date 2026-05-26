@@ -4,9 +4,23 @@ import pytest
 
 from intramap.models import (
     DEVICE_TYPES, DiscoveredHost, Host, Inventory, Link, Location,
-    _resolve_device_type, infer_device_type, links_touching, normalize_mac,
-    trace_all_paths, trace_paths,
+    _resolve_device_type, infer_device_type, is_valid_ip, links_touching,
+    normalize_mac, trace_all_paths, trace_paths,
 )
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("192.168.1.1", True),
+    ("10.0.0.255", True),
+    ("::1", True),
+    ("2001:db8::1", True),
+    ("999.1.1.1", False),
+    ("not-an-ip", False),
+    ("", False),
+    ("   ", False),
+])
+def test_is_valid_ip(text, expected):
+    assert is_valid_ip(text) is expected
 
 
 # ---------------------------------------------------------------------------

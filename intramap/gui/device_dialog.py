@@ -8,7 +8,9 @@ from PySide6.QtWidgets import (
     QMessageBox, QVBoxLayout,
 )
 
-from intramap.models import DEVICE_TYPES, Host, Inventory, Location, normalize_mac
+from intramap.models import (
+    DEVICE_TYPES, Host, Inventory, Location, is_valid_ip, normalize_mac,
+)
 
 _AUTO = "(auto)"
 
@@ -77,10 +79,17 @@ class AddDeviceDialog(QDialog):
                 f"Un device avec la MAC {mac} existe déjà.")
             return
 
+        ip_text = self._ip.text().strip()
+        if ip_text and not is_valid_ip(ip_text):
+            QMessageBox.warning(
+                self, "IP invalide",
+                f"« {ip_text} » n'est pas une adresse IP valide.")
+            return
+
         now = datetime.now()
         self.result_host = Host(
             mac=mac,
-            ip=(self._ip.text().strip() or None),
+            ip=(ip_text or None),
             hostname=None,
             vendor=None,
             first_seen=now,

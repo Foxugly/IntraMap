@@ -1,9 +1,19 @@
+import ipaddress
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 
 
 _HEX12 = re.compile(r"^[0-9a-f]{12}$")
+
+
+def is_valid_ip(text: str) -> bool:
+    """True si ``text`` est une adresse IPv4 ou IPv6 valide (vide -> False)."""
+    try:
+        ipaddress.ip_address(text.strip())
+        return True
+    except ValueError:
+        return False
 
 
 def normalize_mac(raw: str) -> str:

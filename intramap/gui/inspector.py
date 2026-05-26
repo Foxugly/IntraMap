@@ -19,8 +19,8 @@ from PySide6.QtWidgets import (
 )
 
 from intramap.models import (
-    DEVICE_TYPES, Host, Inventory, Link, Location, links_touching,
-    normalize_mac,
+    DEVICE_TYPES, Host, Inventory, Link, Location, is_valid_ip,
+    links_touching, normalize_mac,
 )
 
 _AUTO = "(auto)"
@@ -438,7 +438,15 @@ class Inspector(QWidget):
             return
         h = self._host
         h.custom_name = _opt_str(self._name.text())
-        h.ip = _opt_str(self._ip.text())
+        ip_text = self._ip.text().strip()
+        if ip_text and not is_valid_ip(ip_text):
+            QMessageBox.warning(
+                self, "IP invalide",
+                f"« {ip_text} » n'est pas une adresse IP valide ; "
+                "valeur précédente conservée.")
+            self._ip.setText(h.ip or "")  # revert vers l'ancienne valeur
+        else:
+            h.ip = ip_text or None
         h.hostname = _opt_str(self._hostname.text())
         h.vendor = _opt_str(self._vendor.text())
         h.device_type = self._dtype.currentData()
