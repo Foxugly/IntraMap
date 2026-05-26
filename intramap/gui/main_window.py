@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QMarginsF, QRectF, QSizeF, Qt
+from PySide6.QtCore import QMarginsF, QRectF, QSettings, QSizeF, Qt
 from PySide6.QtGui import (
     QAbstractTextDocumentLayout, QAction, QActionGroup, QFont, QKeySequence,
     QPageLayout, QPageSize, QPainter, QPdfWriter, QTextDocument,
@@ -29,6 +29,16 @@ from intramap.gui.switch_dialog import SwitchPortDialog
 from intramap.models import Inventory, _resolve_device_type
 
 _DEFAULT_INVENTORY = "inventory.yaml"
+_RECENTS_KEY = "recent_files"
+_RECENTS_MAX = 10
+
+
+def _push_recent(recents: list[str], path: str,
+                 cap: int = _RECENTS_MAX) -> list[str]:
+    """Insère ``path`` en tête de la liste des récents (chemin absolu),
+    sans doublon, plafonné à ``cap``. Fonction pure (testable sans Qt)."""
+    p = str(Path(path).resolve())
+    return ([p] + [x for x in recents if x != p])[:cap]
 
 
 class MainWindow(QMainWindow):
@@ -45,6 +55,9 @@ class MainWindow(QMainWindow):
         self._scan_worker: ScanWorker | None = None
         # Nombre de ports déclaré par switch (MAC -> n), persisté dans layout.
         self._switch_ports: dict[str, int] = {}
+        # Liste des inventaires récemment ouverts (chemins absolus), persistée
+        # via QSettings.
+        self._recents: list[str] = self._load_recents()
         # Le tout premier auto-fit doit attendre que la fenêtre soit visible
         # (sinon le canvas est encore à sa taille par défaut et le fit est
         # calculé sur la mauvaise géométrie).
@@ -85,10 +98,19 @@ class MainWindow(QMainWindow):
 
     def _build_actions(self) -> None:
         st = QStyle
+        self.act_new = QAction(self._icon(st.SP_FileIcon),
+                               "Nouveau", self)
+        self.act_new.setShortcut(QKeySequence.New)
+        self.act_new.triggered.connect(self._new_inventory)
+
         self.act_open = QAction(self._icon(st.SP_DialogOpenButton),
                                 "Ouvrir un inventaire…", self)
         self.act_open.setShortcut(QKeySequence.Open)
         self.act_open.triggered.connect(self._open_inventory)
+
+        self.act_close = QAction("Fermer l'inventaire", self)
+        self.act_close.setShortcut("Ctrl+W")
+        self.act_close.triggered.connect(self._close_inventory)
 
         self.act_save = QAction(self._icon(st.SP_DialogSaveButton),
                                 "Enregistrer", self)
@@ -111,7 +133,9 @@ class MainWindow(QMainWindow):
 
         self.act_add = QAction(self._icon(st.SP_FileDialogNewFolder),
                                "Ajouter un device", self)
-        self.act_add.setShortcut("Ctrl+N")
+        # Ctrl+N est réservé à « Nouveau » (convention) ; l'ajout d'appareil
+        # passe sur Ctrl+Shift+N.
+        self.act_add.setShortcut("Ctrl+Shift+N")
         self.act_add.triggered.connect(self._add_device)
 
         self.act_connect = QAction(self._icon(st.SP_FileLinkIcon),
@@ -181,13 +205,18 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         mb = self.menuBar()
         m_file = mb.addMenu("&Fichier")
+        m_file.addAction(self.act_new)
         m_file.addAction(self.act_open)
+        self.menu_recent = m_file.addMenu("Récemment ouverts")
+        m_file.addAction(self.act_close)
+        m_file.addSeparator()
         m_file.addAction(self.act_save)
         m_file.addAction(self.act_save_as)
         m_file.addSeparator()
         m_file.addAction(self.act_export)
         m_file.addSeparator()
         m_file.addAction(self.act_quit)
+        self._rebuild_recent_menu()
 
         m_edit = mb.addMenu("&Édition")
         m_edit.addAction(self.act_scan)
@@ -278,6 +307,7 @@ class MainWindow(QMainWindow):
             self._pending_initial_fit = True
         self.inspector.set_host(None, inv)
         self._set_dirty(False)
+        self._note_recent(path)
         self.statusBar().showMessage(
             f"{len(inv.hosts)} device(s) chargé(s) depuis {path.name}")
 
@@ -297,6 +327,74 @@ class MainWindow(QMainWindow):
             "Inventaire YAML (*.yaml *.yml);;Tous les fichiers (*)")
         if path:
             self._load_inventory(Path(path))
+
+    # -- nouveau / fermer --------------------------------------------------
+    def _reset_to_empty(self) -> None:
+        """Repart d'un inventaire vide « sans titre » (chemin par défaut)."""
+        self.inv = Inventory()
+        self.inventory_path = Path(_DEFAULT_INVENTORY)
+        self._switch_ports = {}
+        positions = layout_mod.positions_for(self.inv, {})
+        self.canvas.load(self.inv, positions, {}, self.canvas.routing_style)
+        self.inspector.set_host(None, self.inv)
+        self._set_dirty(False)
+
+    def _new_inventory(self) -> None:
+        if not self._confirm_discard():
+            return
+        self._reset_to_empty()
+        self.statusBar().showMessage("Nouvel inventaire")
+
+    def _close_inventory(self) -> None:
+        if not self._confirm_discard():
+            return
+        self._reset_to_empty()
+        self.statusBar().showMessage("Inventaire fermé")
+
+    # -- récemment ouverts -------------------------------------------------
+    @staticmethod
+    def _settings() -> QSettings:
+        return QSettings("Foxugly", "IntraMap")
+
+    def _load_recents(self) -> list[str]:
+        raw = self._settings().value(_RECENTS_KEY, [])
+        if isinstance(raw, str):  # QSettings peut renvoyer un str si 1 entrée
+            raw = [raw]
+        return [str(x) for x in (raw or [])]
+
+    def _persist_recents(self) -> None:
+        self._settings().setValue(_RECENTS_KEY, self._recents)
+
+    def _note_recent(self, path) -> None:
+        self._recents = _push_recent(self._recents, str(path))
+        self._persist_recents()
+        self._rebuild_recent_menu()
+
+    def _rebuild_recent_menu(self) -> None:
+        self.menu_recent.clear()
+        existing = [p for p in self._recents if Path(p).exists()]
+        if not existing:
+            act = self.menu_recent.addAction("(aucun)")
+            act.setEnabled(False)
+            return
+        for p in existing:
+            act = self.menu_recent.addAction(Path(p).name)
+            act.setToolTip(p)
+            act.triggered.connect(
+                lambda _checked=False, path=p: self._open_recent(path))
+        self.menu_recent.addSeparator()
+        clear = self.menu_recent.addAction("Vider la liste")
+        clear.triggered.connect(self._clear_recents)
+
+    def _open_recent(self, path: str) -> None:
+        if not self._confirm_discard():
+            return
+        self._load_inventory(Path(path))
+
+    def _clear_recents(self) -> None:
+        self._recents = []
+        self._persist_recents()
+        self._rebuild_recent_menu()
 
     def _save(self) -> bool:
         try:
@@ -325,7 +423,10 @@ class MainWindow(QMainWindow):
             return False
         self.inventory_path = Path(path)
         self._refresh_title()
-        return self._save()
+        ok = self._save()
+        if ok:
+            self._note_recent(self.inventory_path)
+        return ok
 
     # -- export PDF --------------------------------------------------------
     def _export_pdf(self) -> None:

@@ -13,7 +13,14 @@ import pytest
 
 @pytest.fixture(scope="session")
 def qapp():
-    """QApplication unique pour la session de tests GUI."""
+    """QApplication unique pour la session de tests GUI.
+
+    Isole QSettings dans un emplacement de test temporaire (mode test +
+    format INI) pour ne jamais écrire dans le registre / la config réelle.
+    """
     pyside = pytest.importorskip("PySide6.QtWidgets")
+    from PySide6.QtCore import QSettings, QStandardPaths
+    QStandardPaths.setTestModeEnabled(True)
+    QSettings.setDefaultFormat(QSettings.IniFormat)
     app = pyside.QApplication.instance() or pyside.QApplication([])
     yield app

@@ -6,6 +6,7 @@ l'orientation (bug 5), masquage persistant des poignées de coude (bug 6),
 purge des labels de ports hors plage (bug 7).
 """
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -169,6 +170,80 @@ def test_path_report_flags_unreachable_device():
                    custom_name="Isolé")
     report = build_report(_inv(gw, orphan))
     assert "aucun chemin" in report
+
+
+# ---------------------------------------------------------------------------
+# Menu Fichier : Nouveau / Fermer / Récemment ouverts
+# ---------------------------------------------------------------------------
+
+def test_push_recent_moves_existing_to_front_and_dedups(tmp_path):
+    from intramap.gui.main_window import _push_recent
+    a = str(tmp_path / "a.yaml")
+    b = str(tmp_path / "b.yaml")
+    r = _push_recent([], a)
+    r = _push_recent(r, b)
+    assert r[0] == str(Path(b).resolve())
+    r = _push_recent(r, a)  # déjà présent → revient en tête, pas de doublon
+    assert r[0] == str(Path(a).resolve())
+    assert len(r) == 2
+
+
+def test_push_recent_caps_length(tmp_path):
+    from intramap.gui.main_window import _push_recent
+    r: list[str] = []
+    for i in range(15):
+        r = _push_recent(r, str(tmp_path / f"f{i}.yaml"), cap=10)
+    assert len(r) == 10
+
+
+def test_new_inventory_resets_to_empty(qapp, tmp_path, monkeypatch):
+    from intramap.gui.main_window import MainWindow
+    win = MainWindow(inventory_path=str(tmp_path / "none.yaml"))
+    win.inv = _inv(_host("aa:bb:cc:dd:ee:01"), _host("aa:bb:cc:dd:ee:02"))
+    win._reload_canvas()
+    monkeypatch.setattr(win, "_confirm_discard", lambda: True)
+    monkeypatch.setattr(win, "_persist_recents", lambda: None)
+    win._new_inventory()
+    assert win.inv.hosts == {}
+    assert win.canvas.nodes == {}
+
+
+def test_close_inventory_resets_to_empty(qapp, tmp_path, monkeypatch):
+    from intramap.gui.main_window import MainWindow
+    win = MainWindow(inventory_path=str(tmp_path / "none.yaml"))
+    win.inv = _inv(_host("aa:bb:cc:dd:ee:01"))
+    win._reload_canvas()
+    monkeypatch.setattr(win, "_confirm_discard", lambda: True)
+    monkeypatch.setattr(win, "_persist_recents", lambda: None)
+    win._close_inventory()
+    assert win.inv.hosts == {}
+    assert win.canvas.nodes == {}
+
+
+def test_loading_inventory_adds_to_recents(qapp, tmp_path, monkeypatch):
+    from intramap.gui.main_window import MainWindow
+    from intramap.inventory import save
+    inv_file = tmp_path / "net.yaml"
+    save(_inv(_host("aa:bb:cc:dd:ee:01")), inv_file)
+    win = MainWindow(inventory_path=str(tmp_path / "none.yaml"))
+    monkeypatch.setattr(win, "_persist_recents", lambda: None)
+    win._recents = []
+    win._load_inventory(inv_file)
+    assert str(Path(inv_file).resolve()) in win._recents
+
+
+def test_recent_menu_lists_existing_files_only(qapp, tmp_path, monkeypatch):
+    from intramap.gui.main_window import MainWindow
+    win = MainWindow(inventory_path=str(tmp_path / "none.yaml"))
+    monkeypatch.setattr(win, "_persist_recents", lambda: None)
+    present = tmp_path / "here.yaml"
+    present.write_text("hosts: {}\n", encoding="utf-8")
+    missing = tmp_path / "gone.yaml"
+    win._recents = [str(present), str(missing)]
+    win._rebuild_recent_menu()
+    labels = [a.text() for a in win.menu_recent.actions()]
+    assert "here.yaml" in labels
+    assert "gone.yaml" not in labels
 
 
 # ---------------------------------------------------------------------------
