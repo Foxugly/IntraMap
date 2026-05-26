@@ -119,3 +119,60 @@ def test_unknown_peer_mac_does_not_crash():
     report = build_wiring_report(inv)
     assert "port 1" in report
     assert "ff:ff:ff:ff:ff:ff" in report
+
+
+# ---------------------------------------------------------------------------
+# Export CSV du rapport de câblage
+# ---------------------------------------------------------------------------
+
+from intramap.wiring_report import build_wiring_csv
+
+_CSV_HEADER = ("device,mac,floor,room,local_port,local_label,"
+               "peer,peer_type,peer_port,peer_label,poe")
+
+
+def test_csv_emits_exact_header():
+    assert build_wiring_csv(Inventory()).splitlines()[0] == _CSV_HEADER
+
+
+def test_csv_empty_inventory_is_header_only():
+    lines = build_wiring_csv(Inventory()).splitlines()
+    assert lines == [_CSV_HEADER]
+
+
+def test_csv_one_row_per_cable_with_peer_info():
+    inv = Inventory()
+    sw = _h("aa:00:00:00:00:01", "SW", "switch", floor="RDC", room="Salon")
+    pc = _h("aa:00:00:00:00:02", "PC", "laptop")
+    inv.hosts[sw.mac] = sw
+    inv.hosts[pc.mac] = pc
+    inv.links = [Link(mac_a=sw.mac, port_a=3, mac_b=pc.mac, port_b=1)]
+    rows = build_wiring_csv(inv).splitlines()
+    # En-tête + 1 ligne pour le switch (le PC n'est pas un type d'infra).
+    assert len(rows) == 2
+    assert rows[1] == "SW,aa:00:00:00:00:01,RDC,Salon,3,,PC,laptop,1,,false"
+
+
+def test_csv_poe_column_true_when_link_is_poe():
+    inv = Inventory()
+    sw = _h("aa:00:00:00:00:01", "SW", "switch")
+    pp = _h("aa:00:00:00:00:02", "PP", "patchpanel")
+    inv.hosts[sw.mac] = sw
+    inv.hosts[pp.mac] = pp
+    inv.links = [Link(mac_a=sw.mac, port_a=1, mac_b=pp.mac, port_b=24,
+                      poe=True)]
+    rows = build_wiring_csv(inv).splitlines()
+    assert all(r.endswith(",true") for r in rows[1:])
+
+
+def test_csv_includes_port_labels():
+    inv = Inventory()
+    pp = _h("aa:00:00:00:00:01", "PP", "patchpanel", port_labels={24: "A12"})
+    out = _h("aa:00:00:00:00:02", "Outlet", "outlet", port_labels={1: "21"})
+    inv.hosts[pp.mac] = pp
+    inv.hosts[out.mac] = out
+    inv.links = [Link(mac_a=pp.mac, port_a=24, mac_b=out.mac, port_b=1)]
+    csv_text = build_wiring_csv(inv)
+    # Le label local du PP (A12) et celui de l'outlet vu comme pair (21).
+    assert "A12" in csv_text
+    assert "21" in csv_text

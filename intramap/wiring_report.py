@@ -8,6 +8,9 @@ Pensee pour etre la base d'une page texte ajoutee a l'export PDF.
 """
 from __future__ import annotations
 
+import csv
+import io
+
 from intramap.models import (
     Inventory, Link, links_touching, _resolve_device_type,
 )
@@ -131,3 +134,51 @@ def build_wiring_report(inv: Inventory) -> str:
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+_CSV_HEADER = [
+    "device", "mac", "floor", "room", "local_port", "local_label",
+    "peer", "peer_type", "peer_port", "peer_label", "poe",
+]
+
+
+def build_wiring_csv(inv: Inventory) -> str:
+    """Export CSV des branchements d'infrastructure : une ligne par couple
+    (appareil d'infra, câble qui le touche). L'en-tête est toujours émis ;
+    même ordre d'appareils que :func:`build_wiring_report`.
+    """
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(_CSV_HEADER)
+
+    by_type: dict[str, list] = {t: [] for t in INFRA_TYPES_ORDER}
+    for host in inv.hosts.values():
+        t = _resolve_device_type(host)
+        if t in by_type:
+            by_type[t].append(host)
+    for t in INFRA_TYPES_ORDER:
+        by_type[t].sort(key=lambda h: _device_name(h).lower())
+
+    for t in INFRA_TYPES_ORDER:
+        for host in by_type[t]:
+            def own_port(lk: Link) -> int | None:
+                return lk.port_a if lk.mac_a == host.mac else lk.port_b
+            links = sorted(links_touching(inv, host.mac),
+                           key=lambda lk: _port_sort_key(own_port(lk)))
+            for lk in links:
+                p_here = own_port(lk)
+                p_label_here = ""
+                if (p_here is not None and host.port_labels
+                        and p_here in host.port_labels):
+                    p_label_here = host.port_labels[p_here]
+                peer_name, peer_port, peer_type, peer_label = _peer_info(
+                    inv, lk, host.mac)
+                writer.writerow([
+                    _device_name(host), host.mac,
+                    host.location.floor or "", host.location.room or "",
+                    "" if p_here is None else p_here, p_label_here,
+                    peer_name, peer_type,
+                    "" if peer_port is None else peer_port, peer_label,
+                    "true" if lk.poe else "false",
+                ])
+    return buf.getvalue()
