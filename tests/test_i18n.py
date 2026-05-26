@@ -32,12 +32,13 @@ def test_set_language_invalid_defaults_to_french():
 
 
 def test_resolve_system_language(monkeypatch):
-    monkeypatch.setattr(i18n.locale, "getlocale",
+    from intramap import i18n as core
+    monkeypatch.setattr(core.locale, "getlocale",
                         lambda *a: ("fr_FR", "UTF-8"))
-    assert i18n.resolve_system_language() == "fr"
-    monkeypatch.setattr(i18n.locale, "getlocale",
+    assert core.resolve_system_language() == "fr"
+    monkeypatch.setattr(core.locale, "getlocale",
                         lambda *a: ("de_DE", "UTF-8"))
-    assert i18n.resolve_system_language() == "en"
+    assert core.resolve_system_language() == "en"
 
 
 def test_available_languages_includes_system_fr_en():
@@ -66,13 +67,17 @@ def _tr_literals(path):
     return out
 
 
-def test_every_wrapped_gui_string_has_english_translation():
-    """Toute chaîne enrobée dans tr("…") du GUI doit avoir une entrée EN."""
+def test_every_wrapped_string_has_english_translation():
+    """Toute chaîne enrobée dans tr("…") (GUI + builders de rapports) doit
+    avoir une entrée dans le catalogue anglais."""
     import pathlib
-    import intramap.gui as guipkg
-    gui_dir = pathlib.Path(guipkg.__file__).parent
+    import intramap as pkg
+    root = pathlib.Path(pkg.__file__).parent
+    files = sorted((root / "gui").glob("*.py"))
+    files += [root / "wiring_report.py", root / "path_report.py",
+              root / "diagnostics.py", root / "scan_diff.py"]
     missing = []
-    for py in sorted(gui_dir.glob("*.py")):
+    for py in files:
         for lit in _tr_literals(py):
             if lit not in i18n._CATALOG["en"]:
                 missing.append(f"{py.name}: {lit!r}")
