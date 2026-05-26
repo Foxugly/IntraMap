@@ -120,7 +120,8 @@ def test_list_vendor_filter_excludes_hosts_with_no_vendor(tmp_path: Path, capsys
 
 
 def test_list_missing_inventory_returns_clear_error(tmp_path: Path, capsys):
-    exit_code = main(["--inventory", str(tmp_path / "absent.yaml"), "list"])
+    exit_code = main(["--inventory", str(tmp_path / "absent.yaml"),
+                      "--lang", "en", "list"])
     captured = capsys.readouterr()
     assert exit_code != 0
     assert "inventory" in (captured.out + captured.err).lower()
@@ -225,7 +226,7 @@ def test_render_all_writes_four_formats(tmp_path: Path):
 def test_render_missing_inventory_returns_error(tmp_path: Path, capsys):
     out_dir = tmp_path / "output"
     exit_code = main([
-        "--inventory", str(tmp_path / "absent.yaml"),
+        "--inventory", str(tmp_path / "absent.yaml"), "--lang", "en",
         "render", "--output-dir", str(out_dir),
     ])
     captured = capsys.readouterr()
@@ -672,8 +673,8 @@ def test_report_output_writes_file(tmp_path, capsys):
     inv_path = tmp_path / "inv.yaml"
     _seed_wired(inv_path)
     out_file = tmp_path / "wiring.csv"
-    rc = main(["--inventory", str(inv_path), "report", "wiring",
-               "--format", "csv", "--output", str(out_file)])
+    rc = main(["--inventory", str(inv_path), "--lang", "en", "report",
+               "wiring", "--format", "csv", "--output", str(out_file)])
     out = capsys.readouterr().out
     assert rc == 0
     assert out_file.is_file()
@@ -682,8 +683,8 @@ def test_report_output_writes_file(tmp_path, capsys):
 
 
 def test_report_missing_inventory_errors(tmp_path, capsys):
-    rc = main(["--inventory", str(tmp_path / "absent.yaml"), "report",
-               "wiring"])
+    rc = main(["--inventory", str(tmp_path / "absent.yaml"), "--lang", "en",
+               "report", "wiring"])
     captured = capsys.readouterr()
     assert rc != 0
     assert "inventory" in (captured.out + captured.err).lower()
@@ -714,7 +715,7 @@ def _seed_clean(path: Path) -> None:
 def test_diagnose_clean_inventory(tmp_path, capsys):
     inv_path = tmp_path / "inv.yaml"
     _seed_clean(inv_path)
-    rc = main(["--inventory", str(inv_path), "diagnose"])
+    rc = main(["--inventory", str(inv_path), "--lang", "fr", "diagnose"])
     out = capsys.readouterr().out
     assert rc == 0
     assert "Aucune anomalie" in out
@@ -731,7 +732,7 @@ def test_diagnose_reports_anomaly(tmp_path, capsys):
             custom_name="PC", device_type="laptop", location=Location(),
             first_seen=now, last_seen=now)},
         last_scan=now), inv_path)
-    rc = main(["--inventory", str(inv_path), "diagnose"])
+    rc = main(["--inventory", str(inv_path), "--lang", "fr", "diagnose"])
     out = capsys.readouterr().out
     assert rc == 0  # sans --strict, exit 0
     assert "ATTENTION" in out or "passerelle" in out.lower()

@@ -18,6 +18,7 @@ from intramap.renderers import plantuml as plantuml_renderer
 from intramap.renderers import graphviz as graphviz_renderer
 from intramap.renderers import mermaid as mermaid_renderer
 from intramap.renderers import html as html_renderer
+from intramap.i18n import tr
 from intramap.wiring_report import build_wiring_report, build_wiring_csv
 from intramap.path_report import build_report as build_path_report
 from intramap.diagnostics import diagnose
@@ -26,13 +27,16 @@ from intramap.diagnostics import diagnose
 def _load_or_report(inv_path: Path):
     """Return the Inventory, or (None, exit_code) on a user-visible failure."""
     if not inv_path.exists():
-        print(f"Inventory file not found: {inv_path}", file=sys.stderr)
-        print("Run `intramap scan` first to create one.", file=sys.stderr)
+        print(tr("Fichier d'inventaire introuvable : {path}").format(
+            path=inv_path), file=sys.stderr)
+        print(tr("Lancez d'abord `intramap scan` pour en créer un."),
+              file=sys.stderr)
         return None, 2
     try:
         return inventory_mod.load(inv_path), 0
     except Exception as e:
-        print(f"Failed to load inventory {inv_path}:\n{e}", file=sys.stderr)
+        print(tr("Échec du chargement de l'inventaire {path} :\n{err}").format(
+            path=inv_path, err=e), file=sys.stderr)
         return None, 4
 
 
@@ -104,7 +108,7 @@ def _cmd_render(args: argparse.Namespace) -> int:
     for name in chosen:
         path, render_fn = targets[name]
         path.write_text(render_fn(), encoding="utf-8")
-        print(f"Wrote {path}")
+        print(tr("Écrit : {path}").format(path=path))
 
     if args.image and "graphviz" in chosen:
         _render_graphviz_image(out_dir)
@@ -121,9 +125,10 @@ def _render_graphviz_image(out_dir: Path) -> None:
     dot_exe = shutil.which("dot")
     if dot_exe is None:
         print(
-            "Warning: 'dot' (Graphviz) not found in PATH. Skipping image "
-            "rendering. Install from https://graphviz.org/download/ or run "
-            f"`dot` manually from {out_dir}.",
+            tr("Avertissement : « dot » (Graphviz) introuvable dans le PATH. "
+               "Rendu image ignoré. Installez depuis "
+               "https://graphviz.org/download/ ou lancez `dot` manuellement "
+               "depuis {dir}.").format(dir=out_dir),
             file=sys.stderr,
         )
         return
@@ -136,18 +141,20 @@ def _render_graphviz_image(out_dir: Path) -> None:
             text=True,
         )
         if result.returncode == 0:
-            print(f"Wrote {out_dir / f'network.{fmt}'}")
+            print(tr("Écrit : {path}").format(
+                path=out_dir / f"network.{fmt}"))
         else:
             print(
-                f"dot failed for {fmt}: {result.stderr.strip()}",
+                tr("Échec de dot pour {fmt} : {err}").format(
+                    fmt=fmt, err=result.stderr.strip()),
                 file=sys.stderr,
             )
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
     if args.format == "csv" and args.type != "wiring":
-        print("--format csv is only supported for the 'wiring' report.",
-              file=sys.stderr)
+        print(tr("--format csv n'est possible que pour le rapport "
+                 "« wiring »."), file=sys.stderr)
         return 2
 
     inv, err = _load_or_report(Path(args.inventory))
@@ -169,7 +176,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
         out_path = Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(text, encoding="utf-8")
-        print(f"Wrote {out_path}")
+        print(tr("Écrit : {path}").format(path=out_path))
     else:
         sys.stdout.write(text)
     return 0
@@ -185,12 +192,13 @@ def _cmd_diagnose(args: argparse.Namespace) -> int:
 
     findings = diagnose(inv)
     if not findings:
-        print("Aucune anomalie détectée.")
+        print(tr("Aucune anomalie détectée."))
         return 0
 
     for f in findings:
-        print(f"[{_DIAG_LABELS.get(f.severity, f.severity)}] {f.message}")
-    print(f"\n{len(findings)} anomalie(s) détectée(s).")
+        label = tr(_DIAG_LABELS.get(f.severity, f.severity))
+        print(f"[{label}] {f.message}")
+    print("\n" + tr("{n} anomalie(s) détectée(s).").format(n=len(findings)))
     return 1 if args.strict else 0
 
 
@@ -224,17 +232,20 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     if not network:
         subnets = _detect_subnets()
         if len(subnets) == 0:
-            print("No local IPv4 subnet detected. Pass --network explicitly.",
-                  file=sys.stderr)
+            print(tr("Aucun sous-réseau IPv4 local détecté. Passez --network "
+                     "explicitement."), file=sys.stderr)
             return 2
         if len(subnets) > 1:
-            print("Multiple local subnets detected:", file=sys.stderr)
+            print(tr("Plusieurs sous-réseaux locaux détectés :"),
+                  file=sys.stderr)
             for s in subnets:
                 print(f"  - {s}", file=sys.stderr)
-            print("Pass --network <CIDR> explicitly.", file=sys.stderr)
+            print(tr("Passez --network <CIDR> explicitement."),
+                  file=sys.stderr)
             return 2
         network = subnets[0]
-        print(f"Auto-detected subnet: {network}")
+        print(tr("Sous-réseau auto-détecté : {network}").format(
+            network=network))
 
     try:
         discovered = scanner.scan(network)
@@ -246,10 +257,10 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     try:
         inv = inventory_mod.load(inv_path)
     except Exception as e:
-        print(f"Failed to load existing inventory {inv_path}:\n{e}",
-              file=sys.stderr)
-        print("Fix the file (or remove it to start fresh) and re-run.",
-              file=sys.stderr)
+        print(tr("Échec du chargement de l'inventaire existant {path} :\n"
+                 "{err}").format(path=inv_path, err=e), file=sys.stderr)
+        print(tr("Corrigez le fichier (ou supprimez-le pour repartir de "
+                 "zéro) puis relancez."), file=sys.stderr)
         return 4
     now = datetime.now()
     previous_macs = set(inv.hosts.keys())
@@ -261,19 +272,20 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     offline = [m for m, h in inv.hosts.items() if not h.online]
     unnamed = [m for m, h in inv.hosts.items() if h.custom_name is None]
     print(
-        f"Scan complete: {len(discovered)} discovered "
-        f"({len(new)} new), {len(offline)} offline, "
-        f"{len(unnamed)} without custom_name."
-    )
-    print(f"Inventory: {inv_path}")
+        tr("Scan terminé : {n} détecté(s) ({new} nouveau(x)), "
+           "{off} hors ligne, {unn} sans nom personnalisé.").format(
+            n=len(discovered), new=len(new), off=len(offline),
+            unn=len(unnamed)))
+    print(tr("Inventaire : {path}").format(path=inv_path))
     diff = diff_inventories(before, inv)
     if diff.has_changes:
         print()
         print(format_scan_diff(diff, inv), end="")
     if len(discovered) == 0:
         print(
-            "Warning: scan returned zero hosts. On macOS/Linux, MAC discovery "
-            "(ARP) requires `sudo`. On Windows, run the shell as administrator.",
+            tr("Avertissement : le scan n'a retourné aucun hôte. Sur "
+               "macOS/Linux, la découverte MAC (ARP) nécessite `sudo`. Sur "
+               "Windows, lancez le terminal en administrateur."),
             file=sys.stderr,
         )
     return 0

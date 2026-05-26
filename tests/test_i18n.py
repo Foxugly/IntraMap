@@ -75,7 +75,7 @@ def test_every_wrapped_string_has_english_translation():
     root = pathlib.Path(pkg.__file__).parent
     files = sorted((root / "gui").glob("*.py"))
     files += [root / "wiring_report.py", root / "path_report.py",
-              root / "diagnostics.py", root / "scan_diff.py"]
+              root / "diagnostics.py", root / "scan_diff.py", root / "cli.py"]
     missing = []
     for py in files:
         for lit in _tr_literals(py):

@@ -374,6 +374,53 @@ _CATALOG: dict[str, dict[str, str]] = {
         "IP modifiée ({n}) :": "IP changed ({n}):",
         "Aucun changement depuis le dernier scan.":
             "No change since the last scan.",
+        # --- Messages du CLI ---
+        "Fichier d'inventaire introuvable : {path}":
+            "Inventory file not found: {path}",
+        "Lancez d'abord `intramap scan` pour en créer un.":
+            "Run `intramap scan` first to create one.",
+        "Échec du chargement de l'inventaire {path} :\n{err}":
+            "Failed to load inventory {path}:\n{err}",
+        "Écrit : {path}": "Wrote {path}",
+        "Avertissement : « dot » (Graphviz) introuvable dans le PATH. "
+        "Rendu image ignoré. Installez depuis https://graphviz.org/download/ "
+        "ou lancez `dot` manuellement depuis {dir}.":
+            "Warning: 'dot' (Graphviz) not found in PATH. Skipping image "
+            "rendering. Install from https://graphviz.org/download/ or run "
+            "`dot` manually from {dir}.",
+        "Échec de dot pour {fmt} : {err}": "dot failed for {fmt}: {err}",
+        "--format csv n'est possible que pour le rapport « wiring ».":
+            "--format csv is only supported for the 'wiring' report.",
+        "Aucune anomalie détectée.": "No anomaly detected.",
+        "ERREUR": "ERROR",
+        "ATTENTION": "WARNING",
+        "INFO": "INFO",
+        "{n} anomalie(s) détectée(s).": "{n} anomaly(ies) detected.",
+        "Aucun sous-réseau IPv4 local détecté. Passez --network "
+        "explicitement.":
+            "No local IPv4 subnet detected. Pass --network explicitly.",
+        "Plusieurs sous-réseaux locaux détectés :":
+            "Multiple local subnets detected:",
+        "Passez --network <CIDR> explicitement.":
+            "Pass --network <CIDR> explicitly.",
+        "Sous-réseau auto-détecté : {network}":
+            "Auto-detected subnet: {network}",
+        "Échec du chargement de l'inventaire existant {path} :\n{err}":
+            "Failed to load existing inventory {path}:\n{err}",
+        "Corrigez le fichier (ou supprimez-le pour repartir de zéro) puis "
+        "relancez.":
+            "Fix the file (or remove it to start fresh) and re-run.",
+        "Scan terminé : {n} détecté(s) ({new} nouveau(x)), {off} hors ligne, "
+        "{unn} sans nom personnalisé.":
+            "Scan complete: {n} discovered ({new} new), {off} offline, "
+            "{unn} without custom name.",
+        "Inventaire : {path}": "Inventory: {path}",
+        "Avertissement : le scan n'a retourné aucun hôte. Sur macOS/Linux, "
+        "la découverte MAC (ARP) nécessite `sudo`. Sur Windows, lancez le "
+        "terminal en administrateur.":
+            "Warning: scan returned zero hosts. On macOS/Linux, MAC discovery "
+            "(ARP) requires `sudo`. On Windows, run the terminal as "
+            "administrator.",
     },
 }
 
