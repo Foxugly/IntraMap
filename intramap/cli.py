@@ -14,6 +14,8 @@ from intramap import scanner
 from intramap.models import _resolve_device_type
 from intramap.renderers import plantuml as plantuml_renderer
 from intramap.renderers import graphviz as graphviz_renderer
+from intramap.renderers import mermaid as mermaid_renderer
+from intramap.renderers import html as html_renderer
 from intramap.wiring_report import build_wiring_report, build_wiring_csv
 from intramap.path_report import build_report as build_path_report
 from intramap.diagnostics import diagnose
@@ -85,21 +87,21 @@ def _cmd_render(args: argparse.Namespace) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     targets = {
-        "plantuml": (out_dir / "network.puml", plantuml_renderer.render),
-        "graphviz": (out_dir / "network.dot", graphviz_renderer.render),
+        "plantuml": (out_dir / "network.puml",
+                     lambda: plantuml_renderer.render(inv)),
+        "graphviz": (out_dir / "network.dot",
+                     lambda: graphviz_renderer.render(inv,
+                                                      copy_assets_to=out_dir)),
+        "mermaid": (out_dir / "network.mmd",
+                    lambda: mermaid_renderer.render(inv)),
+        "html": (out_dir / "network.html",
+                 lambda: html_renderer.render(inv)),
     }
-    if args.format == "all":
-        chosen = list(targets.keys())
-    else:
-        chosen = [args.format]
+    chosen = list(targets.keys()) if args.format == "all" else [args.format]
 
     for name in chosen:
-        path, _ = targets[name]
-        if name == "graphviz":
-            text = graphviz_renderer.render(inv, copy_assets_to=out_dir)
-        else:
-            text = plantuml_renderer.render(inv)
-        path.write_text(text, encoding="utf-8")
+        path, render_fn = targets[name]
+        path.write_text(render_fn(), encoding="utf-8")
         print(f"Wrote {path}")
 
     if args.image and "graphviz" in chosen:
@@ -293,8 +295,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.set_defaults(func=_cmd_list)
 
     p_render = subs.add_parser("render", help="Render diagrams from inventory")
-    p_render.add_argument("--format", choices=["plantuml", "graphviz", "all"],
-                          default="all")
+    p_render.add_argument(
+        "--format",
+        choices=["plantuml", "graphviz", "mermaid", "html", "all"],
+        default="all")
     p_render.add_argument("--output-dir", default="output")
     p_render.add_argument(
         "--image", action="store_true",

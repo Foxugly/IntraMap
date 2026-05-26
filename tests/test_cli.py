@@ -187,6 +187,41 @@ def test_render_format_plantuml_only(tmp_path: Path):
     assert not (out_dir / "network.dot").exists()
 
 
+def test_render_format_mermaid(tmp_path: Path):
+    inv_path = tmp_path / "inv.yaml"
+    out_dir = tmp_path / "output"
+    _seed_inventory(inv_path)
+    rc = main(["--inventory", str(inv_path), "render", "--format", "mermaid",
+               "--output-dir", str(out_dir)])
+    assert rc == 0
+    mmd = out_dir / "network.mmd"
+    assert mmd.is_file()
+    assert mmd.read_text(encoding="utf-8").startswith("flowchart")
+
+
+def test_render_format_html(tmp_path: Path):
+    inv_path = tmp_path / "inv.yaml"
+    out_dir = tmp_path / "output"
+    _seed_inventory(inv_path)
+    rc = main(["--inventory", str(inv_path), "render", "--format", "html",
+               "--output-dir", str(out_dir)])
+    assert rc == 0
+    html = out_dir / "network.html"
+    assert html.is_file()
+    assert "vis-network" in html.read_text(encoding="utf-8")
+
+
+def test_render_all_writes_four_formats(tmp_path: Path):
+    inv_path = tmp_path / "inv.yaml"
+    out_dir = tmp_path / "output"
+    _seed_inventory(inv_path)
+    rc = main(["--inventory", str(inv_path), "render", "--format", "all",
+               "--output-dir", str(out_dir)])
+    assert rc == 0
+    for name in ("network.puml", "network.dot", "network.mmd", "network.html"):
+        assert (out_dir / name).is_file(), name
+
+
 def test_render_missing_inventory_returns_error(tmp_path: Path, capsys):
     out_dir = tmp_path / "output"
     exit_code = main([
