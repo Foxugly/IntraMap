@@ -16,6 +16,7 @@ from intramap.renderers import plantuml as plantuml_renderer
 from intramap.renderers import graphviz as graphviz_renderer
 from intramap.wiring_report import build_wiring_report, build_wiring_csv
 from intramap.path_report import build_report as build_path_report
+from intramap.diagnostics import diagnose
 
 
 def _load_or_report(inv_path: Path):
@@ -170,6 +171,25 @@ def _cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+_DIAG_LABELS = {"error": "ERREUR", "warning": "ATTENTION", "info": "INFO"}
+
+
+def _cmd_diagnose(args: argparse.Namespace) -> int:
+    inv, err = _load_or_report(Path(args.inventory))
+    if err:
+        return err
+
+    findings = diagnose(inv)
+    if not findings:
+        print("Aucune anomalie détectée.")
+        return 0
+
+    for f in findings:
+        print(f"[{_DIAG_LABELS.get(f.severity, f.severity)}] {f.message}")
+    print(f"\n{len(findings)} anomalie(s) détectée(s).")
+    return 1 if args.strict else 0
+
+
 def _detect_subnets() -> list[str]:
     """Return candidate IPv4 subnets from active local interfaces.
 
@@ -298,6 +318,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_report.add_argument("--output", default=None,
                           help="write to this file instead of stdout")
     p_report.set_defaults(func=_cmd_report)
+
+    p_diag = subs.add_parser(
+        "diagnose", help="Check the inventory for cabling anomalies")
+    p_diag.add_argument("--strict", action="store_true",
+                        help="exit with code 1 if any anomaly is found")
+    p_diag.set_defaults(func=_cmd_diagnose)
 
     return parser
 

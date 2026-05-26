@@ -624,3 +624,74 @@ def test_report_missing_inventory_errors(tmp_path, capsys):
     captured = capsys.readouterr()
     assert rc != 0
     assert "inventory" in (captured.out + captured.err).lower()
+
+
+# ---------------------------------------------------------------------------
+# diagnose : détection d'anomalies en CLI
+# ---------------------------------------------------------------------------
+
+def _seed_clean(path: Path) -> None:
+    from intramap.inventory import save
+    now = datetime(2026, 5, 24, 14, 0, 0)
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": Host(
+            mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1", hostname=None,
+            vendor=None, custom_name="Box", device_type="router",
+            is_gateway=True, location=Location(),
+            first_seen=now, last_seen=now),
+        "aa:bb:cc:dd:ee:02": Host(
+            mac="aa:bb:cc:dd:ee:02", ip="192.168.1.2", hostname=None,
+            vendor=None, custom_name="PC", device_type="laptop",
+            location=Location(), first_seen=now, last_seen=now),
+    }, links=[Link(mac_a="aa:bb:cc:dd:ee:02", port_a=1,
+                   mac_b="aa:bb:cc:dd:ee:01", port_b=1)], last_scan=now)
+    save(inv, path)
+
+
+def test_diagnose_clean_inventory(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_clean(inv_path)
+    rc = main(["--inventory", str(inv_path), "diagnose"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Aucune anomalie" in out
+
+
+def test_diagnose_reports_anomaly(tmp_path, capsys):
+    # Inventaire sans passerelle -> au moins une anomalie.
+    inv_path = tmp_path / "inv.yaml"
+    from intramap.inventory import save
+    now = datetime(2026, 5, 24, 14, 0, 0)
+    save(Inventory(hosts={
+        "aa:bb:cc:dd:ee:02": Host(
+            mac="aa:bb:cc:dd:ee:02", ip=None, hostname=None, vendor=None,
+            custom_name="PC", device_type="laptop", location=Location(),
+            first_seen=now, last_seen=now)},
+        last_scan=now), inv_path)
+    rc = main(["--inventory", str(inv_path), "diagnose"])
+    out = capsys.readouterr().out
+    assert rc == 0  # sans --strict, exit 0
+    assert "ATTENTION" in out or "passerelle" in out.lower()
+
+
+def test_diagnose_strict_exits_nonzero_on_anomaly(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    from intramap.inventory import save
+    now = datetime(2026, 5, 24, 14, 0, 0)
+    save(Inventory(hosts={
+        "aa:bb:cc:dd:ee:02": Host(
+            mac="aa:bb:cc:dd:ee:02", ip=None, hostname=None, vendor=None,
+            custom_name="PC", device_type="laptop", location=Location(),
+            first_seen=now, last_seen=now)},
+        last_scan=now), inv_path)
+    rc = main(["--inventory", str(inv_path), "diagnose", "--strict"])
+    capsys.readouterr()
+    assert rc == 1
+
+
+def test_diagnose_strict_clean_exits_zero(tmp_path, capsys):
+    inv_path = tmp_path / "inv.yaml"
+    _seed_clean(inv_path)
+    rc = main(["--inventory", str(inv_path), "diagnose", "--strict"])
+    capsys.readouterr()
+    assert rc == 0
