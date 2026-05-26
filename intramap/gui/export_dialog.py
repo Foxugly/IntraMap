@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from intramap.gui.i18n import tr
+
 # (libelle, identifiant QPageSize)
 _PAGE_SIZES = [
     ("A4", QPageSize.A4),
@@ -62,15 +64,15 @@ class ExportPdfDialog(QDialog):
 
     def __init__(self, content_w: float, content_h: float, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Exporter en PDF")
+        self.setWindowTitle(tr("Exporter en PDF"))
         self.setMinimumWidth(400)
         self._w = content_w
         self._h = content_h
 
         layout = QVBoxLayout(self)
-        intro = QLabel(
+        intro = QLabel(tr(
             "Les proportions de la carte sont toujours conservees.\n"
-            "Choisissez la taille de page et la repartition.")
+            "Choisissez la taille de page et la repartition."))
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
@@ -81,17 +83,17 @@ class ExportPdfDialog(QDialog):
             self.page_combo.addItem(name, sid)
         self.span_combo = QComboBox()
         for label, n in _SPANS:
-            self.span_combo.addItem(label, n)
-        form.addRow("Taille de page :", self.page_combo)
-        form.addRow("Repartition :", self.span_combo)
+            self.span_combo.addItem(tr(label), n)
+        form.addRow(tr("Taille de page :"), self.page_combo)
+        form.addRow(tr("Répartition :"), self.span_combo)
 
-        self.include_wiring = QCheckBox(
+        self.include_wiring = QCheckBox(tr(
             "Ajouter le detail des branchements\n"
-            "(routeurs, switchs, patch panels, outlets)")
-        self.include_wiring.setToolTip(
+            "(routeurs, switchs, patch panels, outlets)"))
+        self.include_wiring.setToolTip(tr(
             "Ajoute, apres la carte, des pages texte qui listent pour chaque "
             "appareil d'infrastructure tous les ports utilises et l'appareil "
-            "branche en face.")
+            "branche en face."))
         layout.addWidget(self.include_wiring)
 
         self.estimate = QLabel()
@@ -117,11 +119,12 @@ class ExportPdfDialog(QDialog):
         total = cols * rows
         if total == 1:
             self.estimate.setText(
-                "-> 1 page : la carte entiere, ajustee a la page.")
+                tr("-> 1 page : la carte entiere, ajustee a la page."))
         else:
             self.estimate.setText(
-                f"-> {cols} x {rows} = {total} pages a assembler "
-                f"(meilleure lisibilite, qualite maximale).")
+                tr("-> {cols} x {rows} = {total} pages a assembler "
+                   "(meilleure lisibilite, qualite maximale).").format(
+                    cols=cols, rows=rows, total=total))
 
     def selection(self) -> tuple[object, int, bool]:
         """Retourne (identifiant QPageSize, nb pages largeur, branchements).

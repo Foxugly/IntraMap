@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
+from intramap.gui.i18n import tr
 from intramap.models import Host, Inventory, Link, _resolve_device_type
 
 _MAX_PORT = 96
@@ -60,7 +61,7 @@ class ConnectDialog(QDialog):
         self._inv = inv
         self.new_links: list[Link] = []
 
-        self.setWindowTitle("Relier deux appareils")
+        self.setWindowTitle(tr("Relier deux appareils"))
         self.setMinimumWidth(540)
         self.resize(540, 500)
         layout = QVBoxLayout(self)
@@ -89,13 +90,13 @@ class ConnectDialog(QDialog):
                     self._dest.setCurrentIndex(i)
                     break
 
-        self._poe = QCheckBox("Toutes ces liaisons sont alimentees en PoE")
-        form.addRow("Appareil A :", self._source)
-        form.addRow("Appareil B :", self._dest)
+        self._poe = QCheckBox(tr("Toutes ces liaisons sont alimentées en PoE"))
+        form.addRow(tr("Appareil A :"), self._source)
+        form.addRow(tr("Appareil B :"), self._dest)
         form.addRow("", self._poe)
         layout.addLayout(form)
 
-        rng = QGroupBox("Remplir une plage de ports")
+        rng = QGroupBox(tr("Remplir une plage de ports"))
         rl = QHBoxLayout(rng)
         self._a_from = QSpinBox()
         self._a_to = QSpinBox()
@@ -104,13 +105,13 @@ class ConnectDialog(QDialog):
                         (self._b_from, 1)):
             sb.setRange(1, _MAX_PORT)
             sb.setValue(val)
-        rl.addWidget(QLabel("Ports A"))
+        rl.addWidget(QLabel(tr("Ports A")))
         rl.addWidget(self._a_from)
         rl.addWidget(QLabel("→"))
         rl.addWidget(self._a_to)
-        rl.addWidget(QLabel("    Port B de depart"))
+        rl.addWidget(QLabel(tr("    Port B de départ")))
         rl.addWidget(self._b_from)
-        gen = QPushButton("Generer")
+        gen = QPushButton(tr("Générer"))
         gen.clicked.connect(self._generate)
         rl.addWidget(gen)
         layout.addWidget(rng)
@@ -121,9 +122,9 @@ class ConnectDialog(QDialog):
         layout.addWidget(self._table)
 
         row_btns = QHBoxLayout()
-        add = QPushButton("+ Ligne")
+        add = QPushButton(tr("+ Ligne"))
         add.clicked.connect(lambda: self._add_row())
-        rm = QPushButton("− Ligne")
+        rm = QPushButton(tr("− Ligne"))
         rm.clicked.connect(self._remove_row)
         row_btns.addWidget(add)
         row_btns.addWidget(rm)
@@ -212,8 +213,8 @@ class ConnectDialog(QDialog):
 
     def _refresh_headers(self) -> None:
         self._table.setHorizontalHeaderLabels([
-            f"Port cote {self._name(self._source)}",
-            f"Port cote {self._name(self._dest)}",
+            tr("Port côté {name}").format(name=self._name(self._source)),
+            tr("Port côté {name}").format(name=self._name(self._dest)),
         ])
         self._update_summary()
 
@@ -264,24 +265,25 @@ class ConnectDialog(QDialog):
     def _update_summary(self) -> None:
         n = len(self._pairs())
         self._summary.setText(
-            f"{n} liaison(s) seront creees : "
-            f"{self._name(self._source)} <-> {self._name(self._dest)}.")
+            tr("{n} liaison(s) seront créées : {a} <-> {b}.").format(
+                n=n, a=self._name(self._source), b=self._name(self._dest)))
 
     def _accept(self) -> None:
         a_mac = self._source.currentData()
         b_mac = self._dest.currentData()
         if not a_mac or not b_mac:
-            QMessageBox.warning(self, "Selection incomplete",
-                                "Choisissez les deux appareils.")
+            QMessageBox.warning(self, tr("Sélection incomplète"),
+                                tr("Choisissez les deux appareils."))
             return
         if a_mac == b_mac:
-            QMessageBox.warning(self, "Meme appareil",
-                                "Les deux appareils doivent etre differents.")
+            QMessageBox.warning(self, tr("Même appareil"),
+                                tr("Les deux appareils doivent être "
+                                   "différents."))
             return
         pairs = self._pairs()
         if not pairs:
-            QMessageBox.warning(self, "Aucune liaison",
-                                "Ajoutez au moins une paire de ports.")
+            QMessageBox.warning(self, tr("Aucune liaison"),
+                                tr("Ajoutez au moins une paire de ports."))
             return
         poe = self._poe.isChecked()
         self.new_links = [

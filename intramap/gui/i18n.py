@@ -214,6 +214,107 @@ _CATALOG: dict[str, dict[str, str]] = {
             "Could not write the file:\n{err}",
         "Export": "Export",
         "Rapport exporté vers\n{name}": "Report exported to\n{name}",
+        # --- Relier deux appareils ---
+        "Relier deux appareils": "Connect two devices",
+        "Toutes ces liaisons sont alimentées en PoE":
+            "All these links are PoE-powered",
+        "Appareil A :": "Device A:",
+        "Appareil B :": "Device B:",
+        "Remplir une plage de ports": "Fill a port range",
+        "Ports A": "Ports A",
+        "    Port B de départ": "    Starting port B",
+        "Générer": "Generate",
+        "+ Ligne": "+ Row",
+        "− Ligne": "− Row",
+        "Port côté {name}": "Port on {name} side",
+        "{n} liaison(s) seront créées : {a} <-> {b}.":
+            "{n} link(s) will be created: {a} <-> {b}.",
+        "Sélection incomplète": "Incomplete selection",
+        "Choisissez les deux appareils.": "Choose both devices.",
+        "Même appareil": "Same device",
+        "Les deux appareils doivent être différents.":
+            "The two devices must be different.",
+        "Aucune liaison": "No link",
+        "Ajoutez au moins une paire de ports.": "Add at least one port pair.",
+        # --- Ports (switch/outlet/patch panel) ---
+        " — port {p}": " — port {p}",
+        "  (PoE)": "  (PoE)",
+        "Ports — {name}": "Ports — {name}",
+        "Nombre de ports :": "Number of ports:",
+        "Gris : libre   —   Vert : occupé   —   Orange : occupé (PoE)."
+        "  Survolez un port pour voir ses liaisons. Le label éventuel "
+        "apparaît entre crochets sous le numéro.":
+            "Grey: free   —   Green: used   —   Orange: used (PoE)."
+            "  Hover a port to see its links. Any label appears in brackets "
+            "under the number.",
+        "Labels des jacks — ex. n° du câble UTP dans le patch panel :":
+            "Jack labels — e.g. UTP cable no. in the patch panel:",
+        "Jack": "Jack",
+        "Label": "Label",
+        "Port {port}": "Port {port}",
+        "{used} port(s) occupé(s), {free} libre(s) sur {count}.":
+            "{used} port(s) used, {free} free out of {count}.",
+        "Port {port} :": "Port {port}:",
+        "Aucune liaison sur cet appareil.": "No link on this device.",
+        "Attention : des liaisons utilisent des ports au-delà du nombre "
+        "déclaré ({ports}). Augmentez le nombre de ports.":
+            "Warning: some links use ports beyond the declared count "
+            "({ports}). Increase the number of ports.",
+        # --- Liste des devices ---
+        "Liste des devices — Type / MAC / IP":
+            "Device list — Type / MAC / IP",
+        "Types affichés :": "Types shown:",
+        "Nom": "Name",
+        "Type": "Type",
+        "Adresse MAC": "MAC address",
+        "IP": "IP",
+        "Exporter en CSV…": "Export to CSV…",
+        "  (aucun type dans l'inventaire)  ":
+            "  (no type in the inventory)  ",
+        "Tout cocher": "Check all",
+        "Tout décocher": "Uncheck all",
+        "Tous les types ▾": "All types ▾",
+        "Aucun type ▾": "No type ▾",
+        "{n} / {total} types ▾": "{n} / {total} types ▾",
+        "{shown} device(s)": "{shown} device(s)",
+        "{shown} / {total} device(s)": "{shown} / {total} device(s)",
+        "Exporter la liste en CSV": "Export the list to CSV",
+        "Fichier CSV (*.csv)": "CSV file (*.csv)",
+        "Impossible d'écrire le CSV :\n{err}":
+            "Could not write the CSV:\n{err}",
+        "Export CSV": "CSV export",
+        "{n} device(s) exporté(s) vers\n{name}":
+            "{n} device(s) exported to\n{name}",
+        # --- Export PDF (dialogue d'options) ---
+        "Tout sur une seule page": "All on one page",
+        "Mosaique - 2 pages de large": "Mosaic - 2 pages wide",
+        "Mosaique - 3 pages de large": "Mosaic - 3 pages wide",
+        "Mosaique - 4 pages de large": "Mosaic - 4 pages wide",
+        "Exporter en PDF": "Export to PDF",
+        "Les proportions de la carte sont toujours conservees.\n"
+        "Choisissez la taille de page et la repartition.":
+            "The map proportions are always preserved.\n"
+            "Choose the page size and layout.",
+        "Taille de page :": "Page size:",
+        "Répartition :": "Layout:",
+        "Ajouter le detail des branchements\n"
+        "(routeurs, switchs, patch panels, outlets)":
+            "Add the wiring detail\n"
+            "(routers, switches, patch panels, outlets)",
+        "Ajoute, apres la carte, des pages texte qui listent pour chaque "
+        "appareil d'infrastructure tous les ports utilises et l'appareil "
+        "branche en face.":
+            "Adds, after the map, text pages listing for each infrastructure "
+            "device all the used ports and the device plugged in opposite.",
+        "-> 1 page : la carte entiere, ajustee a la page.":
+            "-> 1 page: the whole map, fitted to the page.",
+        "-> {cols} x {rows} = {total} pages a assembler "
+        "(meilleure lisibilite, qualite maximale).":
+            "-> {cols} x {rows} = {total} pages to assemble "
+            "(better readability, maximum quality).",
+        # --- Cadres de groupe ---
+        "Glisser l'en-tête pour déplacer tout l'étage":
+            "Drag the header to move the whole floor",
     },
 }
 

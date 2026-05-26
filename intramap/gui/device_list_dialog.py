@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QToolButton, QVBoxLayout, QWidgetAction,
 )
 
+from intramap.gui.i18n import tr
 from intramap.models import Inventory, _resolve_device_type
 
 # Ordre des colonnes : Type est désormais la 2e colonne.
@@ -64,7 +65,7 @@ class DeviceListDialog(QDialog):
 
     def __init__(self, inv: Inventory, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Liste des devices — Type / MAC / IP")
+        self.setWindowTitle(tr("Liste des devices — Type / MAC / IP"))
         self.resize(720, 520)
 
         self._hosts_all = sorted(
@@ -83,7 +84,7 @@ class DeviceListDialog(QDialog):
 
         # --- Barre de filtre -------------------------------------------------
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("Types affichés :"))
+        filter_row.addWidget(QLabel(tr("Types affichés :")))
 
         self._filter_btn = QToolButton()
         self._filter_btn.setPopupMode(QToolButton.InstantPopup)
@@ -98,7 +99,7 @@ class DeviceListDialog(QDialog):
 
         # --- Tableau ---------------------------------------------------------
         self._table = QTableWidget(0, len(_HEADERS))
-        self._table.setHorizontalHeaderLabels(_HEADERS)
+        self._table.setHorizontalHeaderLabels([tr(h) for h in _HEADERS])
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setAlternatingRowColors(True)
@@ -118,9 +119,9 @@ class DeviceListDialog(QDialog):
 
         # --- Boutons bas -----------------------------------------------------
         buttons = QHBoxLayout()
-        export_btn = QPushButton("Exporter en CSV…")
+        export_btn = QPushButton(tr("Exporter en CSV…"))
         export_btn.clicked.connect(self._export_csv)
-        close_btn = QPushButton("Fermer")
+        close_btn = QPushButton(tr("Fermer"))
         close_btn.clicked.connect(self.accept)
         buttons.addWidget(export_btn)
         buttons.addStretch(1)
@@ -140,7 +141,7 @@ class DeviceListDialog(QDialog):
 
         if not self._present_types:
             empty = QWidgetAction(menu)
-            lbl = QLabel("  (aucun type dans l'inventaire)  ")
+            lbl = QLabel(tr("  (aucun type dans l'inventaire)  "))
             lbl.setStyleSheet("color:#888; padding:6px;")
             empty.setDefaultWidget(lbl)
             menu.addAction(empty)
@@ -157,10 +158,10 @@ class DeviceListDialog(QDialog):
                 self._type_checks[t] = cb
 
             menu.addSeparator()
-            all_btn = QPushButton("Tout cocher")
+            all_btn = QPushButton(tr("Tout cocher"))
             all_btn.setFlat(True)
             all_btn.clicked.connect(lambda: self._set_all(True))
-            none_btn = QPushButton("Tout décocher")
+            none_btn = QPushButton(tr("Tout décocher"))
             none_btn.setFlat(True)
             none_btn.clicked.connect(lambda: self._set_all(False))
             for b in (all_btn, none_btn):
@@ -195,14 +196,14 @@ class DeviceListDialog(QDialog):
         total = len(self._present_types)
         n = len(self._checked)
         if n == total:
-            txt = "Tous les types ▾"
+            txt = tr("Tous les types ▾")
         elif n == 0:
-            txt = "Aucun type ▾"
+            txt = tr("Aucun type ▾")
         elif n == 1:
             (only,) = self._checked
             txt = f"{only} ▾"
         else:
-            txt = f"{n} / {total} types ▾"
+            txt = tr("{n} / {total} types ▾").format(n=n, total=total)
         self._filter_btn.setText(txt)
 
     # ------------------------------------------------------------------ #
@@ -239,28 +240,33 @@ class DeviceListDialog(QDialog):
         total = len(self._hosts_all)
         shown = len(self._hosts)
         if shown == total:
-            self._count_label.setText(f"{shown} device(s)")
+            self._count_label.setText(
+                tr("{shown} device(s)").format(shown=shown))
         else:
-            self._count_label.setText(f"{shown} / {total} device(s)")
+            self._count_label.setText(
+                tr("{shown} / {total} device(s)").format(
+                    shown=shown, total=total))
 
     # ------------------------------------------------------------------ #
     def _export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
-            self, "Exporter la liste en CSV", "devices.csv",
-            "Fichier CSV (*.csv)")
+            self, tr("Exporter la liste en CSV"), "devices.csv",
+            tr("Fichier CSV (*.csv)"))
         if not path:
             return
         try:
             # utf-8-sig : Excel ouvre correctement les accents.
             with open(path, "w", newline="", encoding="utf-8-sig") as f:
                 writer = csv.writer(f)
-                writer.writerow(_HEADERS)
+                writer.writerow([tr(h) for h in _HEADERS])
                 for host in self._hosts:
                     writer.writerow(_row_values(host))
         except OSError as e:
             QMessageBox.critical(
-                self, "Echec de l'export", f"Impossible d'ecrire le CSV :\n{e}")
+                self, tr("Échec de l'export"),
+                tr("Impossible d'écrire le CSV :\n{err}").format(err=e))
             return
         QMessageBox.information(
-            self, "Export CSV",
-            f"{len(self._hosts)} device(s) exporte(s) vers\n{Path(path).name}")
+            self, tr("Export CSV"),
+            tr("{n} device(s) exporté(s) vers\n{name}").format(
+                n=len(self._hosts), name=Path(path).name))

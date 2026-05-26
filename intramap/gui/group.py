@@ -11,6 +11,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QGraphicsItem
 
+from intramap.gui.i18n import tr
+
 # Z-order : les cadres passent sous les arêtes (-1) et les nœuds (1).
 FLOOR_Z = -20.0
 ROOM_Z = -15.0
@@ -46,7 +48,7 @@ class GroupBox(QGraphicsItem):
             # Déplaçable : seul l'en-tête capte la souris (cf. shape()).
             self.setAcceptedMouseButtons(Qt.LeftButton)
             self.setCursor(Qt.OpenHandCursor)
-            self.setToolTip("Glisser l'en-tête pour déplacer tout l'étage")
+            self.setToolTip(tr("Glisser l'en-tête pour déplacer tout l'étage"))
         else:
             self.setAcceptedMouseButtons(Qt.NoButton)  # décor pur
 

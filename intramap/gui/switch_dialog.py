@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from intramap.gui.i18n import tr
 from intramap.models import Host, Inventory, Link, _resolve_device_type, links_touching
 
 _MAX_PORTS = 96
@@ -52,8 +53,9 @@ def _describe_port(device: Host, links: list[Link],
         other = inv.hosts.get(other_mac)
         name = (other.custom_name or other.mac) if other is not None else other_mac
         other_port = lk.port_at(other_mac)
-        sp = f" — port {other_port}" if other_port is not None else ""
-        tag = "  (PoE)" if lk.poe else ""
+        sp = (tr(" — port {p}").format(p=other_port)
+              if other_port is not None else "")
+        tag = tr("  (PoE)") if lk.poe else ""
         out.append(f"↔ {name}{sp}{tag}")
     return out
 
@@ -75,13 +77,14 @@ class SwitchPortDialog(QDialog):
         # Copie de travail des labels — appliquée à l'appareil sur OK.
         self._labels: dict[int, str] = dict(switch.port_labels)
 
-        self.setWindowTitle(f"Ports — {switch.custom_name or switch.mac}")
+        self.setWindowTitle(
+            tr("Ports — {name}").format(name=switch.custom_name or switch.mac))
         self.setMinimumWidth(620)
 
         layout = QVBoxLayout(self)
 
         top = QHBoxLayout()
-        top.addWidget(QLabel("Nombre de ports :"))
+        top.addWidget(QLabel(tr("Nombre de ports :")))
         self._spin = QSpinBox()
         self._spin.setRange(1, _MAX_PORTS)
         max_used = max(self._ports) if self._ports else 0
@@ -94,10 +97,10 @@ class SwitchPortDialog(QDialog):
         top.addStretch(1)
         layout.addLayout(top)
 
-        legend = QLabel(
+        legend = QLabel(tr(
             "Gris : libre   —   Vert : occupé   —   Orange : occupé (PoE)."
             "  Survolez un port pour voir ses liaisons. Le label éventuel "
-            "apparaît entre crochets sous le numéro.")
+            "apparaît entre crochets sous le numéro."))
         legend.setStyleSheet("color:#555;")
         legend.setWordWrap(True)
         layout.addWidget(legend)
@@ -133,10 +136,11 @@ class SwitchPortDialog(QDialog):
         self._show_labels = _resolve_device_type(switch) == "outlet"
         self._labels_table: QTableWidget | None = None
         if self._show_labels:
-            layout.addWidget(QLabel("Labels des jacks — ex. n° du câble UTP "
-                                    "dans le patch panel :"))
+            layout.addWidget(QLabel(tr("Labels des jacks — ex. n° du câble "
+                                       "UTP dans le patch panel :")))
             self._labels_table = QTableWidget(0, 2)
-            self._labels_table.setHorizontalHeaderLabels(["Jack", "Label"])
+            self._labels_table.setHorizontalHeaderLabels(
+                [tr("Jack"), tr("Label")])
             self._labels_table.horizontalHeader().setSectionResizeMode(
                 0, QHeaderView.ResizeToContents)
             self._labels_table.horizontalHeader().setSectionResizeMode(
@@ -190,7 +194,7 @@ class SwitchPortDialog(QDialog):
                         "background:#cfe8cf; border:1px solid #2ca02c;"
                         " border-radius:4px; font-size:10px;")
                 cell.setToolTip(
-                    f"Port {port}\n"
+                    tr("Port {port}").format(port=port) + "\n"
                     + "\n".join(_describe_port(self.switch, links, self._inv))
                 )
             r, c = divmod(port - 1, _GRID_COLS)
@@ -198,18 +202,19 @@ class SwitchPortDialog(QDialog):
 
         used = sum(1 for p in self._ports if p <= count)
         self._summary.setText(
-            f"{used} port(s) occupé(s), {count - used} libre(s) sur {count}.")
+            tr("{used} port(s) occupé(s), {free} libre(s) sur {count}.").format(
+                used=used, free=count - used, count=count))
 
         if self._ports:
             lines: list[str] = []
             for port in sorted(self._ports):
-                lines.append(f"Port {port} :")
+                lines.append(tr("Port {port} :").format(port=port))
                 for d in _describe_port(self.switch, self._ports[port],
                                         self._inv):
                     lines.append(f"    {d}")
             self._detail.setText("\n".join(lines))
         else:
-            self._detail.setText("Aucune liaison sur cet appareil.")
+            self._detail.setText(tr("Aucune liaison sur cet appareil."))
 
         # Tableau des labels (uniquement pour les prises).
         if self._labels_table is not None:
@@ -228,9 +233,9 @@ class SwitchPortDialog(QDialog):
         over = sorted(p for p in self._ports if p > count)
         if over:
             self._warning.setText(
-                "Attention : des liaisons utilisent des ports au-delà du "
-                f"nombre déclaré ({', '.join(map(str, over))}). "
-                "Augmentez le nombre de ports.")
+                tr("Attention : des liaisons utilisent des ports au-delà du "
+                   "nombre déclaré ({ports}). Augmentez le nombre de ports.")
+                .format(ports=', '.join(map(str, over))))
         else:
             self._warning.setText("")
 
