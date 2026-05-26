@@ -59,6 +59,10 @@ class MainWindow(QMainWindow):
         # Liste des inventaires récemment ouverts (chemins absolus), persistée
         # via QSettings.
         self._recents: list[str] = self._load_recents()
+        # Historique undo/redo : pile d'instantanés du document.
+        self._restoring = False
+        self._history: list[dict] = []
+        self._hist_pos = -1
         # Le tout premier auto-fit doit attendre que la fenêtre soit visible
         # (sinon le canvas est encore à sa taille par défaut et le fit est
         # calculé sur la mauvaise géométrie).
@@ -92,6 +96,7 @@ class MainWindow(QMainWindow):
             self._load_inventory(self.inventory_path)
         else:
             self._refresh_title()
+            self._reset_history()
 
     # -- actions & menus ---------------------------------------------------
     def _icon(self, sp: QStyle.StandardPixmap):
@@ -126,6 +131,17 @@ class MainWindow(QMainWindow):
                                   "Exporter en PDF…", self)
         self.act_export.setShortcut("Ctrl+E")
         self.act_export.triggered.connect(self._export_pdf)
+
+        self.act_undo = QAction(self._icon(st.SP_ArrowBack), "Annuler", self)
+        self.act_undo.setShortcut(QKeySequence.Undo)
+        self.act_undo.setEnabled(False)
+        self.act_undo.triggered.connect(self._undo)
+
+        self.act_redo = QAction(self._icon(st.SP_ArrowForward), "Rétablir",
+                                self)
+        self.act_redo.setShortcut(QKeySequence.Redo)
+        self.act_redo.setEnabled(False)
+        self.act_redo.triggered.connect(self._redo)
 
         self.act_scan = QAction(self._icon(st.SP_BrowserReload),
                                 "Scanner le réseau", self)
@@ -223,6 +239,9 @@ class MainWindow(QMainWindow):
         self._rebuild_recent_menu()
 
         m_edit = mb.addMenu("&Édition")
+        m_edit.addAction(self.act_undo)
+        m_edit.addAction(self.act_redo)
+        m_edit.addSeparator()
         m_edit.addAction(self.act_scan)
         m_edit.addAction(self.act_add)
         m_edit.addAction(self.act_connect)
@@ -249,6 +268,9 @@ class MainWindow(QMainWindow):
         tb = self.addToolBar("Principale")
         tb.setMovable(False)
         tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        tb.addAction(self.act_undo)
+        tb.addAction(self.act_redo)
+        tb.addSeparator()
         tb.addAction(self.act_scan)
         tb.addAction(self.act_add)
         tb.addAction(self.act_connect)
@@ -312,6 +334,7 @@ class MainWindow(QMainWindow):
             self._pending_initial_fit = True
         self.inspector.set_host(None, inv)
         self._set_dirty(False)
+        self._reset_history()
         self._note_recent(path)
         self.statusBar().showMessage(
             f"{len(inv.hosts)} device(s) chargé(s) depuis {path.name}")
@@ -343,6 +366,7 @@ class MainWindow(QMainWindow):
         self.canvas.load(self.inv, positions, {}, self.canvas.routing_style)
         self.inspector.set_host(None, self.inv)
         self._set_dirty(False)
+        self._reset_history()
 
     def _new_inventory(self) -> None:
         if not self._confirm_discard():
@@ -400,6 +424,69 @@ class MainWindow(QMainWindow):
         self._recents = []
         self._persist_recents()
         self._rebuild_recent_menu()
+
+    # -- historique undo / redo -------------------------------------------
+    _HISTORY_MAX = 50
+
+    def _capture_state(self) -> dict:
+        """Instantané complet du document : inventaire + mise en page."""
+        layout = layout_mod.LayoutData(
+            positions=self.canvas.current_positions(),
+            edge_bends=self.canvas.current_edge_bends(),
+            routing_style=self.canvas.routing_style,
+            switch_ports=self._switch_ports)
+        return {"doc": self.inv.to_dict(),
+                "layout": layout_mod.layout_to_dict(layout)}
+
+    def _restore_state(self, state: dict) -> None:
+        self._restoring = True
+        try:
+            self.inv = Inventory.from_dict(state["doc"])
+            data = layout_mod.layout_from_dict(state["layout"])
+            self._switch_ports = dict(data.switch_ports)
+            positions = layout_mod.positions_for(self.inv, data.positions)
+            self.canvas.load(self.inv, positions, data.edge_bends,
+                             data.routing_style)
+            self._sync_routing_menu()
+            self.inspector.set_host(None, self.inv)
+            self._set_dirty(True)
+        finally:
+            self._restoring = False
+
+    def _reset_history(self) -> None:
+        self._history = [self._capture_state()]
+        self._hist_pos = 0
+        self._update_undo_actions()
+
+    def _record_history(self) -> None:
+        if self._restoring:
+            return
+        del self._history[self._hist_pos + 1:]
+        self._history.append(self._capture_state())
+        if len(self._history) > self._HISTORY_MAX:
+            self._history.pop(0)
+        self._hist_pos = len(self._history) - 1
+        self._update_undo_actions()
+
+    def _undo(self) -> None:
+        if self._hist_pos <= 0:
+            return
+        self._hist_pos -= 1
+        self._restore_state(self._history[self._hist_pos])
+        self._update_undo_actions()
+        self.statusBar().showMessage("Annulé")
+
+    def _redo(self) -> None:
+        if self._hist_pos >= len(self._history) - 1:
+            return
+        self._hist_pos += 1
+        self._restore_state(self._history[self._hist_pos])
+        self._update_undo_actions()
+        self.statusBar().showMessage("Rétabli")
+
+    def _update_undo_actions(self) -> None:
+        self.act_undo.setEnabled(self._hist_pos > 0)
+        self.act_redo.setEnabled(self._hist_pos < len(self._history) - 1)
 
     def _save(self) -> bool:
         try:
@@ -689,6 +776,7 @@ class MainWindow(QMainWindow):
         self._reload_canvas()
         self.canvas.select_mac(host.mac)
         self._set_dirty(True)
+        self._record_history()
         self.statusBar().showMessage(
             f"Device ajouté : {host.custom_name or host.mac}")
 
@@ -721,6 +809,7 @@ class MainWindow(QMainWindow):
             self.canvas.select_mac(a_host.mac)
             self.inspector.set_host(a_host, self.inv)
         self._set_dirty(True)
+        self._record_history()
         b_host = self.inv.hosts.get(first.mac_b)
         peer_name = (b_host.custom_name or b_host.mac) if b_host else first.mac_b
         n = len(dlg.new_links)
@@ -746,6 +835,7 @@ class MainWindow(QMainWindow):
         self.canvas.select_mac(mac)
         self.inspector.refresh_title()
         self._set_dirty(True)
+        self._record_history()
         self.statusBar().showMessage("Modifications appliquees")
 
     def _on_host_deleted(self, mac: str) -> None:
@@ -758,6 +848,7 @@ class MainWindow(QMainWindow):
         self._reload_canvas()
         self.inspector.set_host(None, self.inv)
         self._set_dirty(True)
+        self._record_history()
         self.statusBar().showMessage("Device supprime")
 
     def _relayout(self) -> None:
@@ -767,11 +858,13 @@ class MainWindow(QMainWindow):
                          self.canvas.routing_style)
         self.canvas.fit_all()
         self._set_dirty(True)
+        self._record_history()
         self.statusBar().showMessage("Carte reorganisee par etage et piece")
 
     def _set_routing(self, style: str) -> None:
         self.canvas.set_routing_style(style)
         self._set_dirty(True)
+        self._record_history()
         self.statusBar().showMessage("Style de liaison applique")
 
     def _sync_routing_menu(self) -> None:
@@ -782,6 +875,7 @@ class MainWindow(QMainWindow):
     def _reset_bends(self) -> None:
         self.canvas.reset_all_bends()
         self._set_dirty(True)
+        self._record_history()
         self.statusBar().showMessage("Coudes des liaisons reinitialises")
 
     def _show_device_list(self) -> None:
@@ -827,6 +921,7 @@ class MainWindow(QMainWindow):
         if dlg.exec() == SwitchPortDialog.Accepted:
             self._switch_ports[mac] = dlg.port_count
             self._set_dirty(True)
+            self._record_history()
             self.statusBar().showMessage(
                 f"{host.custom_name or mac} : {dlg.port_count} ports declares")
 

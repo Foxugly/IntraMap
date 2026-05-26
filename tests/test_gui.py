@@ -284,6 +284,102 @@ def test_diagnose_dialog_empty_shows_clean_message(qapp):
 
 
 # ---------------------------------------------------------------------------
+# Undo / redo par instantanés
+# ---------------------------------------------------------------------------
+
+def _win_with(tmp_path, *hosts, links=None):
+    from intramap.gui.main_window import MainWindow
+    win = MainWindow(inventory_path=str(tmp_path / "none.yaml"))
+    win.inv = _inv(*hosts, links=links)
+    win._reload_canvas()
+    win._reset_history()
+    return win
+
+
+def test_undo_redo_add_device(qapp, tmp_path):
+    a = _host("aa:bb:cc:dd:ee:01", custom_name="A")
+    win = _win_with(tmp_path, a)
+    b = _host("aa:bb:cc:dd:ee:02", custom_name="B")
+    win.inv.hosts[b.mac] = b
+    win._reload_canvas()
+    win._record_history()
+    assert b.mac in win.inv.hosts
+    win._undo()
+    assert b.mac not in win.inv.hosts
+    assert a.mac in win.inv.hosts
+    win._redo()
+    assert b.mac in win.inv.hosts
+
+
+def test_undo_delete_restores_device_and_link(qapp, tmp_path):
+    a = _host("aa:bb:cc:dd:ee:01", custom_name="A")
+    b = _host("aa:bb:cc:dd:ee:02", custom_name="B")
+    link = Link(mac_a=a.mac, port_a=1, mac_b=b.mac, port_b=2)
+    win = _win_with(tmp_path, a, b, links=[link])
+    win._on_host_deleted(b.mac)
+    assert b.mac not in win.inv.hosts
+    assert win.inv.links == []
+    win._undo()
+    assert b.mac in win.inv.hosts
+    assert len(win.inv.links) == 1
+    assert win.inv.links[0].touches(a.mac) and win.inv.links[0].touches(b.mac)
+
+
+def test_undo_reverts_inspector_edit(qapp, tmp_path):
+    a = _host("aa:bb:cc:dd:ee:01", custom_name="Old")
+    win = _win_with(tmp_path, a)
+    win.inv.hosts[a.mac].custom_name = "New"
+    win._on_host_changed(a.mac)
+    assert win.inv.hosts[a.mac].custom_name == "New"
+    win._undo()
+    assert win.inv.hosts[a.mac].custom_name == "Old"
+
+
+def test_undo_preserves_node_positions(qapp, tmp_path):
+    a = _host("aa:bb:cc:dd:ee:01", custom_name="A")
+    win = _win_with(tmp_path, a)
+    win.canvas.nodes[a.mac].setPos(123.0, 456.0)
+    win._reset_history()  # baseline avec la position connue
+    b = _host("aa:bb:cc:dd:ee:02", custom_name="B")
+    win.inv.hosts[b.mac] = b
+    win._reload_canvas()
+    win._record_history()
+    win._undo()
+    pos = win.canvas.nodes[a.mac].pos()
+    assert (pos.x(), pos.y()) == (123.0, 456.0)
+
+
+def test_undo_redo_action_enablement(qapp, tmp_path):
+    a = _host("aa:bb:cc:dd:ee:01", custom_name="A")
+    win = _win_with(tmp_path, a)
+    assert not win.act_undo.isEnabled()
+    assert not win.act_redo.isEnabled()
+    win.inv.hosts["aa:bb:cc:dd:ee:02"] = _host("aa:bb:cc:dd:ee:02")
+    win._reload_canvas()
+    win._record_history()
+    assert win.act_undo.isEnabled()
+    assert not win.act_redo.isEnabled()
+    win._undo()
+    assert not win.act_undo.isEnabled()
+    assert win.act_redo.isEnabled()
+
+
+def test_new_change_after_undo_clears_redo(qapp, tmp_path):
+    a = _host("aa:bb:cc:dd:ee:01", custom_name="A")
+    win = _win_with(tmp_path, a)
+    win.inv.hosts["aa:bb:cc:dd:ee:02"] = _host("aa:bb:cc:dd:ee:02")
+    win._reload_canvas()
+    win._record_history()
+    win._undo()
+    assert win.act_redo.isEnabled()
+    # Nouvelle action après undo : la branche redo doit être purgée.
+    win.inv.hosts["aa:bb:cc:dd:ee:03"] = _host("aa:bb:cc:dd:ee:03")
+    win._reload_canvas()
+    win._record_history()
+    assert not win.act_redo.isEnabled()
+
+
+# ---------------------------------------------------------------------------
 # ScanWorker — logique de run() et cycle de vie du thread à la fermeture
 # ---------------------------------------------------------------------------
 
