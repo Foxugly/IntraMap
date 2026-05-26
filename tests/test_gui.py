@@ -169,3 +169,50 @@ def test_path_report_flags_unreachable_device():
                    custom_name="Isolé")
     report = build_report(_inv(gw, orphan))
     assert "aucun chemin" in report
+
+
+# ---------------------------------------------------------------------------
+# ScanWorker — logique de run() et cycle de vie du thread à la fermeture
+# ---------------------------------------------------------------------------
+
+def test_scan_worker_emits_succeeded_with_results(qapp, monkeypatch):
+    from intramap.gui import scan_worker
+    from intramap.models import DiscoveredHost
+    fake = [DiscoveredHost(mac="aa:bb:cc:dd:ee:01", ip="192.168.1.1",
+                           hostname=None, vendor=None)]
+    monkeypatch.setattr(scan_worker.scanner, "scan", lambda net: fake)
+    w = scan_worker.ScanWorker("192.168.1.0/24")
+    got = []
+    w.succeeded.connect(got.append)
+    w.run()  # exécution synchrone : on teste la logique hors thread
+    assert got == [fake]
+
+
+def test_scan_worker_emits_failed_on_error(qapp, monkeypatch):
+    from intramap.gui import scan_worker
+
+    def boom(net):
+        raise RuntimeError("nmap introuvable")
+
+    monkeypatch.setattr(scan_worker.scanner, "scan", boom)
+    w = scan_worker.ScanWorker("192.168.1.0/24")
+    errs = []
+    w.failed.connect(errs.append)
+    w.run()
+    assert errs and "nmap introuvable" in errs[0]
+
+
+def test_close_waits_for_running_scan_worker(qapp, tmp_path, monkeypatch):
+    from unittest.mock import MagicMock
+    from intramap.gui.main_window import MainWindow
+
+    win = MainWindow(inventory_path=str(tmp_path / "none.yaml"))
+    monkeypatch.setattr(win, "_confirm_discard", lambda: True)
+    worker = MagicMock()
+    win._scan_worker = worker
+    event = MagicMock()
+
+    win.closeEvent(event)
+
+    worker.wait.assert_called_once()
+    event.accept.assert_called_once()

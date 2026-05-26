@@ -345,6 +345,33 @@ def test_save_preserves_existing_layout_when_omitted(tmp_path: Path):
     assert load_layout_dict(path).get("routing_style") == "straight"
 
 
+def test_save_fsyncs_temp_file_before_rename(tmp_path: Path, monkeypatch):
+    """Durabilité : le fichier temporaire doit être flush + fsync avant le
+    rename atomique, pour ne pas laisser un inventaire tronqué après un crash."""
+    import os as _os
+    calls: list = []
+    monkeypatch.setattr(_os, "fsync", lambda fd: calls.append(fd))
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host("aa:bb:cc:dd:ee:01", "192.168.1.1"),
+    }, last_scan=datetime(2026, 5, 24))
+    save(inv, tmp_path / "inv.yaml")
+    assert calls, "save() doit appeler os.fsync sur le fichier temporaire"
+
+
+def test_save_preserve_layout_aborts_on_unreadable_existing_file(tmp_path: Path):
+    """save (layout omis) ne doit pas écraser silencieusement un fichier
+    existant illisible : il lève, et l'original reste intact."""
+    path = tmp_path / "inv.yaml"
+    corrupt = "hosts: [not, a, mapping\n"  # YAML invalide
+    path.write_text(corrupt, encoding="utf-8")
+    inv = Inventory(hosts={
+        "aa:bb:cc:dd:ee:01": make_host("aa:bb:cc:dd:ee:01", "192.168.1.1"),
+    }, last_scan=datetime(2026, 5, 24))
+    with pytest.raises(yaml.YAMLError):
+        save(inv, path)  # layout omis
+    assert path.read_text(encoding="utf-8") == corrupt
+
+
 def test_save_then_load_round_trip_with_links(tmp_path: Path):
     inv = Inventory(
         hosts={

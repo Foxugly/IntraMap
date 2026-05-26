@@ -549,6 +549,9 @@ class MainWindow(QMainWindow):
         worker.succeeded.connect(self._on_scan_done)
         worker.failed.connect(self._on_scan_failed)
         worker.finished.connect(self._on_scan_finished)
+        # Laisser Qt libérer le thread après traitement de `finished` (évite la
+        # course liée au déréférencement synchrone du QThread dans le slot).
+        worker.finished.connect(worker.deleteLater)
         self._scan_worker = worker
         worker.start()
 
@@ -724,6 +727,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         if self._confirm_discard():
+            # Attendre la fin d'un scan en cours avant de fermer, sinon le
+            # QThread serait détruit alors qu'il tourne encore.
+            if self._scan_worker is not None:
+                self._scan_worker.wait()
             event.accept()
         else:
             event.ignore()

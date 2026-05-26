@@ -46,6 +46,26 @@ def load_layout_dict(path: str | Path) -> dict:
     return layout if isinstance(layout, dict) else {}
 
 
+def _read_layout_section(path: Path) -> dict:
+    """Lit la section ``layout`` d'un fichier existant, pour la préserver lors
+    d'un ``save`` sans layout explicite.
+
+    Contrairement à :func:`load_layout_dict`, ne masque PAS les erreurs : si le
+    fichier existe mais est illisible / mal formé, on lève. Mieux vaut
+    interrompre l'enregistrement (l'original reste intact) que de l'écraser en
+    silence et perdre la mise en page de l'utilisateur. Fichier absent ou sans
+    section ``layout`` → ``{}``.
+    """
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        return {}
+    layout = data.get("layout")
+    return layout if isinstance(layout, dict) else {}
+
+
 def save(inv: Inventory, path: str | Path, layout: dict | None = None) -> None:
     """Write an Inventory to YAML atomically.
 
@@ -59,7 +79,7 @@ def save(inv: Inventory, path: str | Path, layout: dict | None = None) -> None:
     """
     p = Path(path)
     if layout is None:
-        layout = load_layout_dict(p) or None
+        layout = _read_layout_section(p) or None
 
     data = inv.to_dict()  # {"last_scan": ..., "links": [...], "hosts": {...}}
     document: dict = {"last_scan": data.get("last_scan")}
@@ -84,6 +104,10 @@ def save(inv: Inventory, path: str | Path, layout: dict | None = None) -> None:
             raise
         with f:
             yaml.safe_dump(document, f, sort_keys=False, allow_unicode=True)
+            # Durabilité : forcer l'écriture sur disque avant le rename, sinon
+            # un crash/coupure peut laisser un fichier renommé mais vide.
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_name, p)
     except Exception:
         # On any failure, remove temp file if it still exists
