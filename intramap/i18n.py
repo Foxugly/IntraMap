@@ -64,6 +64,7 @@ _CATALOG: dict[str, dict[str, str]] = {
         "Langue modifiée": "Language changed",
         "La langue sera appliquée au prochain démarrage.":
             "The language will be applied on the next start.",
+        "Langue appliquée": "Language applied",
         # --- Chargement / sauvegarde / export ---
         "Ouvrir un inventaire": "Open inventory",
         "Inventaire illisible": "Unreadable inventory",

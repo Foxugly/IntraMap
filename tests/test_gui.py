@@ -462,6 +462,29 @@ def test_scan_done_no_dialog_when_no_change(qapp, tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Bascule de langue à chaud (sans redémarrage)
+# ---------------------------------------------------------------------------
+
+def test_language_hot_switch_retranslates_live(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from intramap.gui.main_window import MainWindow
+    from intramap.gui import i18n as gui_i18n
+    # Pas de dialogue bloquant attendu, mais on neutralise par sécurité.
+    monkeypatch.setattr(QMessageBox, "information",
+                        staticmethod(lambda *a, **k: None))
+    win = MainWindow(inventory_path=str(tmp_path / "none.yaml"))
+    assert win.act_undo.text() == "Annuler"          # français au départ
+    assert win.inspector._tabs.tabText(0) == "Identité"
+
+    win._set_language("en")
+
+    assert win.act_undo.text() == "Undo"              # retraduit à chaud
+    assert win.inspector._tabs.tabText(0) == "Identity"
+    assert win._search.placeholderText().startswith("Search")
+    gui_i18n.set_language("fr")
+
+
+# ---------------------------------------------------------------------------
 # Recherche / filtre sur le canvas
 # ---------------------------------------------------------------------------
 

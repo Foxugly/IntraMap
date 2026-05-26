@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 0)
         splitter.setSizes([860, 320])
         self.setCentralWidget(splitter)
+        self.splitter = splitter
 
         self.canvas.node_moved.connect(self._on_node_moved)
         self.canvas.selection_changed.connect(self._on_selection_changed)
@@ -917,9 +918,71 @@ class MainWindow(QMainWindow):
 
     def _set_language(self, code: str) -> None:
         i18n.save_language(code)
-        QMessageBox.information(
-            self, tr("Langue modifiée"),
-            tr("La langue sera appliquée au prochain démarrage."))
+        i18n.set_language(
+            i18n.resolve_system_language() if code == "system" else code)
+        self._retranslate()
+        self.statusBar().showMessage(tr("Langue appliquée"))
+
+    def _retranslate(self) -> None:
+        """Ré-applique la langue courante à l'UI persistante, sans redémarrer.
+
+        Les dialogues sont recréés à chaque ouverture : ils suivent déjà la
+        langue. On retraduit ici les actions, la barre de menus, l'inspecteur
+        (libellés figés à la construction) et les tooltips du canvas.
+        """
+        self.act_new.setText(tr("Nouveau"))
+        self.act_open.setText(tr("Ouvrir un inventaire…"))
+        self.act_close.setText(tr("Fermer l'inventaire"))
+        self.act_save.setText(tr("Enregistrer"))
+        self.act_save_as.setText(tr("Enregistrer sous…"))
+        self.act_export.setText(tr("Exporter en PDF…"))
+        self.act_undo.setText(tr("Annuler"))
+        self.act_redo.setText(tr("Rétablir"))
+        self.act_scan.setText(tr("Scanner le réseau"))
+        self.act_add.setText(tr("Ajouter un device"))
+        self.act_connect.setText(tr("Relier deux appareils…"))
+        self.act_delete.setText(tr("Supprimer le device sélectionné"))
+        self.act_fit.setText(tr("Ajuster à la fenêtre"))
+        self.act_zoom_in.setText(tr("Zoom avant"))
+        self.act_zoom_out.setText(tr("Zoom arrière"))
+        self.act_toggle_inspector.setText(tr("Panneau latéral"))
+        self.act_toggle_inspector.setToolTip(
+            tr("Masquer / réafficher le panneau d'édition à droite"))
+        self.act_relayout.setText(tr("Réorganiser automatiquement"))
+        self.act_device_list.setText(tr("Liste des devices (MAC / IP)…"))
+        self.act_path_report.setText(tr("Rapport des chemins réseau…"))
+        self.act_diagnose.setText(tr("Diagnostics réseau…"))
+        self.act_reset_bends.setText(tr("Réinitialiser les coudes"))
+        self.act_quit.setText(tr("Quitter"))
+        for style, label in (
+            ("ortho_h", tr("Angles droits — horizontal d'abord")),
+            ("ortho_v", tr("Angles droits — vertical d'abord")),
+            ("straight", tr("Lignes droites")),
+        ):
+            self.routing_actions[style].setText(label)
+        self._search.setPlaceholderText(tr("Rechercher (nom, IP, type, étage…)"))
+
+        self.menuBar().clear()
+        self._build_menus()
+        self._replace_inspector()
+        self._reload_canvas()
+
+    def _replace_inspector(self) -> None:
+        """Recrée l'inspecteur (ses libellés sont figés) dans la langue
+        courante, en conservant la sélection affichée."""
+        mac = self.canvas.selected_mac()
+        idx = self.splitter.indexOf(self.inspector)
+        old = self.inspector
+        self.inspector = Inspector()
+        self.splitter.replaceWidget(idx, self.inspector)
+        old.deleteLater()
+        self.inspector.host_changed.connect(self._on_host_changed)
+        self.inspector.host_deleted.connect(self._on_host_deleted)
+        self.inspector.select_requested.connect(self._on_inspector_select)
+        self.act_toggle_inspector.toggled.connect(self.inspector.setVisible)
+        self.inspector.setVisible(self.act_toggle_inspector.isChecked())
+        host = self.inv.hosts.get(mac) if mac else None
+        self.inspector.set_host(host, self.inv)
 
     def _show_device_list(self) -> None:
         DeviceListDialog(self.inv, self).exec()
