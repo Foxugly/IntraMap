@@ -20,6 +20,7 @@ from intramap.gui import layout as layout_mod
 from intramap.gui.canvas import MapView
 from intramap.gui.device_dialog import AddDeviceDialog
 from intramap.gui.device_list_dialog import DeviceListDialog
+from intramap.gui.diagnose_dialog import DiagnoseDialog
 from intramap.gui.export_dialog import ExportPdfDialog, page_grid
 from intramap.gui.inspector import Inspector
 from intramap.gui.link_dialog import ConnectDialog
@@ -179,6 +180,9 @@ class MainWindow(QMainWindow):
         self.act_path_report = QAction("Rapport des chemins réseau…", self)
         self.act_path_report.triggered.connect(self._show_path_report)
 
+        self.act_diagnose = QAction("Diagnostics réseau…", self)
+        self.act_diagnose.triggered.connect(self._show_diagnostics)
+
         # Style de routage des liaisons (exclusif).
         self.routing_group = QActionGroup(self)
         self.routing_group.setExclusive(True)
@@ -239,6 +243,7 @@ class MainWindow(QMainWindow):
         m_view.addSeparator()
         m_view.addAction(self.act_device_list)
         m_view.addAction(self.act_path_report)
+        m_view.addAction(self.act_diagnose)
 
     def _build_toolbar(self) -> None:
         tb = self.addToolBar("Principale")
@@ -785,6 +790,16 @@ class MainWindow(QMainWindow):
     def _show_path_report(self) -> None:
         """Ouvre le rapport traceroute."""
         PathReportDialog(self.inv, self).exec()
+
+    def _show_diagnostics(self) -> None:
+        """Ouvre le rapport de diagnostics ; un double-clic sur une anomalie
+        sélectionne l'appareil concerné sur la carte."""
+        dlg = DiagnoseDialog(self.inv, self)
+        dlg.exec()
+        mac = dlg.selected_mac
+        if mac and mac in self.inv.hosts:
+            self.canvas.select_mac(mac)
+            self.inspector.set_host(self.inv.hosts[mac], self.inv)
 
     def _on_node_moved(self) -> None:
         self._set_dirty(True)

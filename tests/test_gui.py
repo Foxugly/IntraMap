@@ -247,6 +247,43 @@ def test_recent_menu_lists_existing_files_only(qapp, tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Dialogue Diagnostics
+# ---------------------------------------------------------------------------
+
+def test_diagnose_dialog_lists_one_row_per_finding(qapp):
+    from intramap.diagnostics import diagnose
+    from intramap.gui.diagnose_dialog import DiagnoseDialog
+    # Inventaire sans passerelle -> au moins un finding.
+    inv = _inv(_host("aa:bb:cc:dd:ee:01", device_type="laptop"))
+    dlg = DiagnoseDialog(inv)
+    assert dlg._list.count() == len(diagnose(inv))
+    assert dlg._list.count() >= 1
+
+
+def test_diagnose_dialog_double_click_selects_device(qapp):
+    from PySide6.QtCore import Qt
+    from intramap.gui.diagnose_dialog import DiagnoseDialog
+    a = _host("aa:bb:cc:dd:ee:01", device_type="laptop")
+    inv = _inv(a, links=[Link(mac_a=a.mac, mac_b="ff:ff:ff:ff:ff:ff")])
+    dlg = DiagnoseDialog(inv)
+    item = next(dlg._list.item(i) for i in range(dlg._list.count())
+                if dlg._list.item(i).data(Qt.UserRole))
+    dlg._on_double_click(item)
+    assert dlg.selected_mac == a.mac
+
+
+def test_diagnose_dialog_empty_shows_clean_message(qapp):
+    from intramap.gui.diagnose_dialog import DiagnoseDialog
+    gw = _host("aa:bb:cc:dd:ee:01", is_gateway=True, device_type="router")
+    pc = _host("aa:bb:cc:dd:ee:02", device_type="laptop")
+    inv = _inv(gw, pc,
+               links=[Link(mac_a=pc.mac, port_a=1, mac_b=gw.mac, port_b=1)])
+    dlg = DiagnoseDialog(inv)
+    assert dlg._list.count() == 1
+    assert "Aucune anomalie" in dlg._list.item(0).text()
+
+
+# ---------------------------------------------------------------------------
 # ScanWorker — logique de run() et cycle de vie du thread à la fermeture
 # ---------------------------------------------------------------------------
 
