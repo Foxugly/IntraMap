@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from intramap.diagnostics import diagnose
+from intramap.gui.i18n import tr
 from intramap.models import Inventory
 
 _COLOR = {"error": "#c0392b", "warning": "#e67e22", "info": "#2c3e50"}
@@ -28,22 +29,23 @@ class DiagnoseDialog(QDialog):
         self.selected_mac: str | None = None
         self._findings = diagnose(inv)
 
-        self.setWindowTitle("Diagnostics réseau")
+        self.setWindowTitle(tr("Diagnostics réseau"))
         self.resize(640, 460)
         layout = QVBoxLayout(self)
 
-        intro = QLabel(
+        intro = QLabel(tr(
             "Anomalies de câblage détectées. Double-cliquez une ligne pour "
-            "sélectionner l'appareil concerné sur la carte.")
+            "sélectionner l'appareil concerné sur la carte."))
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
         self._list = QListWidget()
         self._list.itemDoubleClicked.connect(self._on_double_click)
         if not self._findings:
-            self._list.addItem("Aucune anomalie détectée. ✓")
+            self._list.addItem(tr("Aucune anomalie détectée. ✓"))
         for f in self._findings:
-            item = QListWidgetItem(f"{_PREFIX.get(f.severity, '●')}  {f.message}")
+            prefix = tr(_PREFIX.get(f.severity, "●"))
+            item = QListWidgetItem(f"{prefix}  {f.message}")
             item.setForeground(QColor(_COLOR.get(f.severity, "#000000")))
             item.setData(Qt.UserRole, list(f.macs))
             self._list.addItem(item)
@@ -51,7 +53,7 @@ class DiagnoseDialog(QDialog):
 
         btns = QHBoxLayout()
         btns.addStretch(1)
-        close = QPushButton("Fermer")
+        close = QPushButton(tr("Fermer"))
         close.clicked.connect(self.accept)
         btns.addWidget(close)
         layout.addLayout(btns)

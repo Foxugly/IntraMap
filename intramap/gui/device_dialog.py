@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QVBoxLayout,
 )
 
+from intramap.gui.i18n import tr
 from intramap.models import (
     DEVICE_TYPES, Host, Inventory, Location, is_valid_ip, normalize_mac,
 )
@@ -33,7 +34,7 @@ class AddDeviceDialog(QDialog):
 
     def __init__(self, inv: Inventory, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Ajouter un device")
+        self.setWindowTitle(tr("Ajouter un device"))
         self.setMinimumWidth(360)
         self._inv = inv
         self.result_host: Host | None = None
@@ -44,22 +45,22 @@ class AddDeviceDialog(QDialog):
 
         self._mac = QLineEdit(_next_free_mac(set(inv.hosts.keys())))
         self._name = QLineEdit()
-        self._name.setPlaceholderText("ex. : Switch garage")
+        self._name.setPlaceholderText(tr("ex. : Switch garage"))
         self._ip = QLineEdit()
-        self._ip.setPlaceholderText("optionnel")
+        self._ip.setPlaceholderText(tr("optionnel"))
         self._dtype = QComboBox()
-        self._dtype.addItem(_AUTO, None)
+        self._dtype.addItem(tr(_AUTO), None)
         for t in sorted(DEVICE_TYPES):
             self._dtype.addItem(t, t)
         self._floor = QLineEdit()
         self._room = QLineEdit()
 
-        form.addRow("MAC :", self._mac)
-        form.addRow("Nom :", self._name)
-        form.addRow("IP :", self._ip)
-        form.addRow("Type :", self._dtype)
-        form.addRow("Étage :", self._floor)
-        form.addRow("Pièce :", self._room)
+        form.addRow(tr("MAC :"), self._mac)
+        form.addRow(tr("Nom :"), self._name)
+        form.addRow(tr("IP :"), self._ip)
+        form.addRow(tr("Type :"), self._dtype)
+        form.addRow(tr("Étage :"), self._floor)
+        form.addRow(tr("Pièce :"), self._room)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -71,19 +72,20 @@ class AddDeviceDialog(QDialog):
         try:
             mac = normalize_mac(self._mac.text())
         except ValueError as e:
-            QMessageBox.warning(self, "MAC invalide", str(e))
+            QMessageBox.warning(self, tr("MAC invalide"), str(e))
             return
         if mac in self._inv.hosts:
             QMessageBox.warning(
-                self, "MAC déjà présente",
-                f"Un device avec la MAC {mac} existe déjà.")
+                self, tr("MAC déjà présente"),
+                tr("Un device avec la MAC {mac} existe déjà.").format(mac=mac))
             return
 
         ip_text = self._ip.text().strip()
         if ip_text and not is_valid_ip(ip_text):
             QMessageBox.warning(
-                self, "IP invalide",
-                f"« {ip_text} » n'est pas une adresse IP valide.")
+                self, tr("IP invalide"),
+                tr("« {ip} » n'est pas une adresse IP valide.").format(
+                    ip=ip_text))
             return
 
         now = datetime.now()

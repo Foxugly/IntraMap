@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit, QPushButton, QVBoxLayout,
 )
 
+from intramap.gui.i18n import tr
 from intramap.models import Inventory
 from intramap.path_report import build_report
 
@@ -31,15 +32,15 @@ class PathReportDialog(QDialog):
         super().__init__(parent)
         self._text = build_report(inv)
 
-        self.setWindowTitle("Rapport des chemins réseau")
+        self.setWindowTitle(tr("Rapport des chemins réseau"))
         self.resize(660, 580)
         layout = QVBoxLayout(self)
 
-        intro = QLabel(
+        intro = QLabel(tr(
             "Chemin physique de chaque appareil jusqu'à la passerelle "
             "Internet, hop par hop.\nLe parcours est non-directionnel et ne "
             "transite que par les appareils d'infrastructure (switch, patch "
-            "panel, prise, routeur, AP).")
+            "panel, prise, routeur, AP)."))
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
@@ -53,11 +54,11 @@ class PathReportDialog(QDialog):
         layout.addWidget(view)
 
         btns = QHBoxLayout()
-        copy_btn = QPushButton("Copier")
+        copy_btn = QPushButton(tr("Copier"))
         copy_btn.clicked.connect(self._copy)
-        export_btn = QPushButton("Exporter en .txt…")
+        export_btn = QPushButton(tr("Exporter en .txt…"))
         export_btn.clicked.connect(self._export)
-        close_btn = QPushButton("Fermer")
+        close_btn = QPushButton(tr("Fermer"))
         close_btn.clicked.connect(self.accept)
         btns.addWidget(copy_btn)
         btns.addWidget(export_btn)
@@ -70,8 +71,8 @@ class PathReportDialog(QDialog):
 
     def _export(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
-            self, "Exporter le rapport", "chemins-reseau.txt",
-            "Fichier texte (*.txt)")
+            self, tr("Exporter le rapport"), "chemins-reseau.txt",
+            tr("Fichier texte (*.txt)"))
         if not path:
             return
         try:
@@ -79,9 +80,9 @@ class PathReportDialog(QDialog):
                 f.write(self._text)
         except OSError as e:
             QMessageBox.critical(
-                self, "Échec de l'export",
-                f"Impossible d'écrire le fichier :\n{e}")
+                self, tr("Échec de l'export"),
+                tr("Impossible d'écrire le fichier :\n{err}").format(err=e))
             return
         QMessageBox.information(
-            self, "Export",
-            f"Rapport exporté vers\n{Path(path).name}")
+            self, tr("Export"),
+            tr("Rapport exporté vers\n{name}").format(name=Path(path).name))

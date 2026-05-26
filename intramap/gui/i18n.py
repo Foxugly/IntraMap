@@ -177,6 +177,43 @@ _CATALOG: dict[str, dict[str, str]] = {
         "Liaison invalide": "Invalid link",
         "Supprimer « {name} » de la carte ?":
             "Remove « {name} » from the map?",
+        # --- Ajouter un device ---
+        "ex. : Switch garage": "e.g. Garage switch",
+        "optionnel": "optional",
+        "MAC invalide": "Invalid MAC",
+        "MAC déjà présente": "MAC already present",
+        "Un device avec la MAC {mac} existe déjà.":
+            "A device with MAC {mac} already exists.",
+        "« {ip} » n'est pas une adresse IP valide.":
+            "« {ip} » is not a valid IP address.",
+        # --- Diagnostics (dialogue) ---
+        "Diagnostics réseau": "Network diagnostics",
+        "Anomalies de câblage détectées. Double-cliquez une ligne pour "
+        "sélectionner l'appareil concerné sur la carte.":
+            "Cabling anomalies detected. Double-click a row to select the "
+            "device on the map.",
+        "Aucune anomalie détectée. ✓": "No anomaly detected. ✓",
+        "Fermer": "Close",
+        "● ERREUR": "● ERROR",
+        "● ATTENTION": "● WARNING",
+        "● INFO": "● INFO",
+        # --- Rapport des chemins (dialogue) ---
+        "Rapport des chemins réseau": "Network paths report",
+        "Chemin physique de chaque appareil jusqu'à la passerelle "
+        "Internet, hop par hop.\nLe parcours est non-directionnel et ne "
+        "transite que par les appareils d'infrastructure (switch, patch "
+        "panel, prise, routeur, AP).":
+            "Physical path of each device to the Internet gateway, hop by "
+            "hop.\nThe route is non-directional and only transits through "
+            "infrastructure devices (switch, patch panel, outlet, router, AP).",
+        "Copier": "Copy",
+        "Exporter en .txt…": "Export to .txt…",
+        "Exporter le rapport": "Export the report",
+        "Fichier texte (*.txt)": "Text file (*.txt)",
+        "Impossible d'écrire le fichier :\n{err}":
+            "Could not write the file:\n{err}",
+        "Export": "Export",
+        "Rapport exporté vers\n{name}": "Report exported to\n{name}",
     },
 }
 
